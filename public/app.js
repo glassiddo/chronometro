@@ -12,6 +12,7 @@ const state = {
   selected: {},
   results: [],
   hintText: "",
+  showConnectingLines: true,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -167,10 +168,12 @@ function hintMarkup() {
 
 function toolbarMarkup({ backId = "", backLabel = "" } = {}) {
   const destinationLinesLabel = state.hintText ? "Hide destination lines" : "Show destination lines";
+  const connectingLinesLabel = state.showConnectingLines ? "Hide connecting lines" : "Show connecting lines";
   return `
     <div class="toolbar">
       ${backId ? `<button class="action secondary" id="${backId}">${escapeHtml(backLabel)}</button>` : ""}
       <button class="action secondary" id="hintButton">${destinationLinesLabel}</button>
+      <button class="action secondary" id="connectingLinesButton" type="button" aria-pressed="${state.showConnectingLines}">${connectingLinesLabel}</button>
       <button class="action secondary" id="resetRoute">Reset route</button>
       <button class="action secondary" id="giveUp">Give up</button>
     </div>
@@ -187,6 +190,15 @@ function bindPuzzleToolbar() {
         const lines = finalStationLineHint();
         state.hintText = lines ? `Final station is served by: ${lines}` : "No line hint is available for this station.";
       }
+      if (state.stage === "direction") renderDirectionStep();
+      else if (state.stage === "alight") renderAlightStep();
+      else renderLineStep();
+    });
+  }
+  const connectingLinesButton = $("#connectingLinesButton");
+  if (connectingLinesButton) {
+    connectingLinesButton.addEventListener("click", () => {
+      state.showConnectingLines = !state.showConnectingLines;
       if (state.stage === "direction") renderDirectionStep();
       else if (state.stage === "alight") renderAlightStep();
       else renderLineStep();
@@ -392,11 +404,13 @@ function renderAlightStep() {
   const stopSignals = (stationId) => {
     const runSec = runtimeBetween(selected.directionId, selected.boardStation, stationId);
     const services = station(stationId).services || {};
-    const transferBadges = Object.keys(services)
-      .filter((routeId) => routeId !== selected.routeId && route(routeId))
-      .sort((a, b) => compareText(route(a).label, route(b).label))
-      .map(lineBadge)
-      .join("");
+    const transferBadges = state.showConnectingLines
+      ? Object.keys(services)
+          .filter((routeId) => routeId !== selected.routeId && route(routeId))
+          .sort((a, b) => compareText(route(a).label, route(b).label))
+          .map(lineBadge)
+          .join("")
+      : "";
     return `
       <span class="stop-meta">
         <small>${formatCompactTime(runSec)} ride</small>
@@ -681,6 +695,9 @@ function startPuzzle() {
 
 async function init() {
   $("#game").innerHTML = `<section class="summary"><h2>Loading</h2><p>Preparing the July 2026 Paris network.</p></section>`;
+  $("#homeButton").addEventListener("click", () => {
+    if (state.data) restartDay();
+  });
   const response = await fetch(DATA_URL);
   if (!response.ok) throw new Error("Data load failed");
   state.data = await response.json();

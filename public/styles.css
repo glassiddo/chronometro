@@ -69,12 +69,23 @@ h1 {
 }
 
 .home-title {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
   font-size: clamp(36px, 7vw, 74px);
   line-height: .88;
   letter-spacing: 0;
   text-transform: uppercase;
   font-weight: 900;
   text-align: left;
+}
+
+.home-title:hover,
+.home-title:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
 }
 
 .date-lockup {
