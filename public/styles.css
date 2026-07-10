@@ -162,6 +162,70 @@ h1 {
   font-weight: 800;
 }
 
+.orientation-map {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fbfaf4;
+}
+
+.orientation-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 11;
+}
+
+.map-bg {
+  fill: #f3efe4;
+}
+
+.map-park {
+  fill: rgba(93, 142, 89, .18);
+}
+
+.paris-outline {
+  fill: none;
+  stroke: #9c9588;
+  stroke-width: 2.2;
+}
+
+.seine {
+  fill: none;
+  stroke: #6ca6c8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4.5;
+}
+
+.map-marker circle {
+  stroke: none;
+}
+
+.map-marker text {
+  paint-order: stroke;
+  stroke: #fffdf8;
+  stroke-linejoin: round;
+  stroke-width: 4;
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  text-anchor: middle;
+}
+
+.start-marker circle {
+  fill: var(--accent);
+}
+
+.end-marker circle {
+  fill: var(--danger);
+}
+
+.current-marker circle {
+  fill: var(--ok);
+}
+
 .hint {
   margin-top: 14px;
   padding: 10px 12px;
