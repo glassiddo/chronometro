@@ -71,9 +71,9 @@ function formatSignedTime(sec) {
 
 function formatLegBreakdown(leg) {
   const parts = [
-    ["Ride", leg.rideSec],
+    ["Transfer", leg.transferSec],
     ["Wait", leg.waitSec],
-    ["Transfers", leg.transferSec],
+    ["Ride", leg.rideSec],
   ]
     .filter(([, sec]) => Number.isFinite(sec) && sec > 0)
     .map(([label, sec]) => `${label} ${formatCompactTime(sec)}`);
@@ -156,7 +156,7 @@ function renderRouteList(legs, { showDirection = true } = {}) {
           <p>
             <strong>${escapeHtml(station(leg.from).name)} -> ${escapeHtml(station(leg.to).name)}</strong>
             ${showDirection ? `<small>Direction ${escapeHtml(direction(leg.directionId).label)}</small>` : ""}
-            ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
+            ${detail ? `<small class="leg-detail">${escapeHtml(detail)}</small>` : ""}
           </p>
           <small>${Number.isFinite(leg.elapsedSec) && leg.elapsedSec > 0 ? formatTime(leg.elapsedSec) : ""}</small>
         </div>
