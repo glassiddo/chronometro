@@ -203,10 +203,17 @@ h1 {
 .leg-chip p {
   margin: 0;
   min-width: 0;
+  padding-right: 8px;
 }
 
 .leg-chip small {
   color: var(--muted);
+}
+
+.leg-chip > small:last-child {
+  justify-self: end;
+  min-width: 58px;
+  text-align: right;
 }
 
 .workspace {

@@ -73,7 +73,7 @@ function formatLegBreakdown(leg) {
   const parts = [
     ["Ride", leg.rideSec],
     ["Wait", leg.waitSec],
-    ["Transfer", leg.transferSec],
+    ["Transfers", leg.transferSec],
   ]
     .filter(([, sec]) => Number.isFinite(sec) && sec > 0)
     .map(([label, sec]) => `${label} ${formatCompactTime(sec)}`);
@@ -144,7 +144,7 @@ function currentPuzzle() {
   return state.daily[state.puzzleIndex];
 }
 
-function renderRouteList(legs) {
+function renderRouteList(legs, { showDirection = true } = {}) {
   if (!legs.length) return `<p class="muted">No legs yet.</p>`;
   return legs
     .map(
@@ -155,7 +155,7 @@ function renderRouteList(legs) {
           ${lineBadge(leg.routeId)}
           <p>
             <strong>${escapeHtml(station(leg.from).name)} -> ${escapeHtml(station(leg.to).name)}</strong>
-            <small>Direction ${escapeHtml(direction(leg.directionId).label)}</small>
+            ${showDirection ? `<small>Direction ${escapeHtml(direction(leg.directionId).label)}</small>` : ""}
             ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
           </p>
           <small>${Number.isFinite(leg.elapsedSec) && leg.elapsedSec > 0 ? formatTime(leg.elapsedSec) : ""}</small>
@@ -579,7 +579,7 @@ function routeBreakdownMarkup(totals) {
     <div class="time-breakdown">
       <span><small>Ride</small><strong>${formatTime(totals.rideSec)}</strong></span>
       <span><small>Wait</small><strong>${formatTime(totals.waitSec)}</strong></span>
-      <span><small>Transfer</small><strong>${formatTime(totals.transferSec)}</strong></span>
+      <span><small>Transfers</small><strong>${formatTime(totals.transferSec)}</strong></span>
       <span><small>Total</small><strong>${formatTime(totals.totalSec)}</strong></span>
     </div>
   `;
@@ -591,7 +591,7 @@ function routePanel(title, legs, totalSec, timing = null) {
     <div class="route-panel">
       <h3>${escapeHtml(title)} <small>${formatTime(totalSec)}</small></h3>
       ${routeBreakdownMarkup(totals)}
-      <div class="route-list">${renderRouteList(legs)}</div>
+      <div class="route-list">${renderRouteList(legs, { showDirection: false })}</div>
     </div>
   `;
 }
