@@ -238,10 +238,18 @@ function transferFallback(fromMode, toMode) {
   return defaults.fallback;
 }
 
-function transferSeconds(fromStation, toStation, fromMode, toMode) {
+function waitSeconds(directionId, routeId, mode) {
+  const byDirection = state.data.metadata.waitSecondsByDirection || {};
+  const byRoute = state.data.metadata.waitSecondsByRoute || {};
+  return byDirection[directionId] ?? byRoute[routeId] ?? state.data.metadata.waitSecondsByMode[mode] ?? 180;
+}
+
+function transferSeconds(fromStation, toStation, fromRouteId, toRouteId, fromMode, toMode) {
+  const routePair = state.data.routeTransfers?.[fromStation]?.[toStation]?.[fromRouteId]?.[toRouteId];
+  if (Number.isFinite(routePair)) return routePair;
+  if (fromStation === toStation) return transferFallback(fromMode, toMode);
   const explicit = state.data.transfers[fromStation]?.[toStation];
   if (Number.isFinite(explicit)) return explicit;
-  if (fromStation === toStation) return transferFallback(fromMode, toMode);
   return null;
 }
 
@@ -463,11 +471,18 @@ function addLeg(toStation) {
     return;
   }
 
-  let connectSec = state.data.metadata.waitSecondsByMode[r.mode] || 180;
+  let connectSec = waitSeconds(selected.directionId, selected.routeId, r.mode);
   if (state.legs.length) {
     const previous = state.legs[state.legs.length - 1];
     const previousMode = route(previous.routeId).mode;
-    const walk = transferSeconds(state.currentStation, selected.boardStation, previousMode, r.mode);
+    const walk = transferSeconds(
+      state.currentStation,
+      selected.boardStation,
+      previous.routeId,
+      selected.routeId,
+      previousMode,
+      r.mode,
+    );
     if (!Number.isFinite(walk)) {
       renderLineStep("There is no transfer link between those stations in the feed.");
       return;

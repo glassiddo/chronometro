@@ -33,11 +33,13 @@ This writes `public/data/metro-express-data.json`.
 The current bundle contains:
 
 - 36 selected routes
-- 143 line/direction patterns
-- 755 playable stations
+- 114 line/direction patterns
+- 762 playable stations
 - 75 eligible puzzle pairs, each with one precomputed fastest route
 
-Consecutive in-vehicle runtimes are averaged from `stop_times.txt`. Interchange times use `transfers.txt` where present, with documented mode-based fallbacks for missing same-station transfers.
+Consecutive in-vehicle runtimes are averaged from `stop_times.txt`. Interchange times use raw child-stop `transfers.txt` route-pair minimums before station collapse, with documented mode-based fallbacks only for missing same-station transfers. `pathways.txt` is not used.
+
+Expected waits are static and deterministic: the generator derives median scheduled headways from typical weekday 07:00-10:00 peak departures in `trips.txt` / `stop_times.txt`, then stores half-headway waits by direction and route with mode defaults as fallbacks. Routing does not use the actual current date/time, disruptions, or live data.
 
 Each puzzle stores an `optimalRoute` object with the fastest route and `totalSec` optimal time. Scoring is based on the player's time delta against that fastest route.
 

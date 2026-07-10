@@ -1,0 +1,3 @@
+gouv_paris_gtfs-export/
+scripts/__pycache__/
+*.pyc
