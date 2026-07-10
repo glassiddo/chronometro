@@ -69,6 +69,17 @@ function formatSignedTime(sec) {
   return `+${formatTime(sec)} vs fastest`;
 }
 
+function formatLegBreakdown(leg) {
+  const parts = [
+    ["Ride", leg.rideSec],
+    ["Wait", leg.waitSec],
+    ["Transfer", leg.transferSec],
+  ]
+    .filter(([, sec]) => Number.isFinite(sec) && sec > 0)
+    .map(([label, sec]) => `${label} ${formatCompactTime(sec)}`);
+  return parts.length ? parts.join(" · ") : "";
+}
+
 function parisDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Paris",
@@ -137,16 +148,20 @@ function renderRouteList(legs) {
   if (!legs.length) return `<p class="muted">No legs yet.</p>`;
   return legs
     .map(
-      (leg) => `
+      (leg) => {
+        const detail = formatLegBreakdown(leg);
+        return `
         <div class="leg-chip">
           ${lineBadge(leg.routeId)}
           <p>
             <strong>${escapeHtml(station(leg.from).name)} -> ${escapeHtml(station(leg.to).name)}</strong>
             <small>Direction ${escapeHtml(direction(leg.directionId).label)}</small>
+            ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
           </p>
           <small>${Number.isFinite(leg.elapsedSec) && leg.elapsedSec > 0 ? formatTime(leg.elapsedSec) : ""}</small>
         </div>
-      `,
+      `;
+      },
     )
     .join("");
 }
@@ -462,20 +477,14 @@ function runtimeBetween(dirId, fromStation, toStation) {
   return dir.runtimes.slice(fromIndex, toIndex).reduce((sum, sec) => sum + sec, 0);
 }
 
-function addLeg(toStation) {
-  const selected = state.selected;
+function legTiming(selected, toStation, rideSec) {
   const r = route(selected.routeId);
-  const runSec = runtimeBetween(selected.directionId, selected.boardStation, toStation);
-  if (!Number.isFinite(runSec)) {
-    renderLineStep("That leg is not connected in the selected direction.");
-    return;
-  }
-
-  let connectSec = waitSeconds(selected.directionId, selected.routeId, r.mode);
+  const waitSec = waitSeconds(selected.directionId, selected.routeId, r.mode);
+  let transferSec = 0;
   if (state.legs.length) {
     const previous = state.legs[state.legs.length - 1];
     const previousMode = route(previous.routeId).mode;
-    const walk = transferSeconds(
+    const transfer = transferSeconds(
       state.currentStation,
       selected.boardStation,
       previous.routeId,
@@ -483,23 +492,40 @@ function addLeg(toStation) {
       previousMode,
       r.mode,
     );
-    if (!Number.isFinite(walk)) {
-      renderLineStep("There is no transfer link between those stations in the feed.");
-      return;
-    }
-    connectSec += walk;
+    if (!Number.isFinite(transfer)) return null;
+    transferSec = transfer;
+  }
+  return {
+    rideSec,
+    waitSec,
+    transferSec,
+    elapsedSec: rideSec + waitSec + transferSec,
+  };
+}
+
+function addLeg(toStation) {
+  const selected = state.selected;
+  const runSec = runtimeBetween(selected.directionId, selected.boardStation, toStation);
+  if (!Number.isFinite(runSec)) {
+    renderLineStep("That leg is not connected in the selected direction.");
+    return;
   }
 
-  const elapsedSec = connectSec + runSec;
+  const timing = legTiming(selected, toStation, runSec);
+  if (!timing) {
+    renderLineStep("There is no transfer link between those stations in the feed.");
+    return;
+  }
+
   const leg = {
     routeId: selected.routeId,
     directionId: selected.directionId,
     from: selected.boardStation,
     to: toStation,
-    elapsedSec,
+    ...timing,
   };
   state.legs.push(leg);
-  state.totalSec += elapsedSec;
+  state.totalSec += timing.elapsedSec;
   state.currentStation = toStation;
   state.selected = {};
 
@@ -534,10 +560,37 @@ function scoreRoute(puzzle, signature, totalSec) {
   return { score, label: "Slow route" };
 }
 
-function routePanel(title, legs, totalSec) {
+function routeTimingTotals(legs, totalSec = null) {
+  const totals = legs.reduce(
+    (sum, leg) => ({
+      rideSec: sum.rideSec + (Number.isFinite(leg.rideSec) ? leg.rideSec : 0),
+      waitSec: sum.waitSec + (Number.isFinite(leg.waitSec) ? leg.waitSec : 0),
+      transferSec: sum.transferSec + (Number.isFinite(leg.transferSec) ? leg.transferSec : 0),
+      totalSec: sum.totalSec + (Number.isFinite(leg.elapsedSec) ? leg.elapsedSec : 0),
+    }),
+    { rideSec: 0, waitSec: 0, transferSec: 0, totalSec: 0 },
+  );
+  if (Number.isFinite(totalSec)) totals.totalSec = totalSec;
+  return totals;
+}
+
+function routeBreakdownMarkup(totals) {
+  return `
+    <div class="time-breakdown">
+      <span><small>Ride</small><strong>${formatTime(totals.rideSec)}</strong></span>
+      <span><small>Wait</small><strong>${formatTime(totals.waitSec)}</strong></span>
+      <span><small>Transfer</small><strong>${formatTime(totals.transferSec)}</strong></span>
+      <span><small>Total</small><strong>${formatTime(totals.totalSec)}</strong></span>
+    </div>
+  `;
+}
+
+function routePanel(title, legs, totalSec, timing = null) {
+  const totals = timing || routeTimingTotals(legs, totalSec);
   return `
     <div class="route-panel">
       <h3>${escapeHtml(title)} <small>${formatTime(totalSec)}</small></h3>
+      ${routeBreakdownMarkup(totals)}
       <div class="route-list">${renderRouteList(legs)}</div>
     </div>
   `;
@@ -549,7 +602,10 @@ function precomputedLegs(routeInfo) {
     directionId: leg.directionId,
     from: leg.from,
     to: leg.to,
-    elapsedSec: null,
+    rideSec: leg.rideSec,
+    waitSec: leg.waitSec,
+    transferSec: leg.transferSec,
+    elapsedSec: leg.elapsedSec,
   }));
 }
 
@@ -558,6 +614,7 @@ function renderResult() {
   const signature = routeSignature(state.legs);
   const scored = scoreRoute(puzzle, signature, state.totalSec);
   const optimal = puzzle.optimalRoute;
+  const optimalLegs = precomputedLegs(optimal);
   const deltaSec = Math.max(0, state.totalSec - optimal.totalSec);
   const slowPct = optimal.totalSec ? Math.round((deltaSec / optimal.totalSec) * 100) : 0;
   const transferCount = Math.max(0, state.legs.length - 1);
@@ -582,7 +639,7 @@ function renderResult() {
       <p class="result-note">${escapeHtml(formatSignedTime(deltaSec))}${slowPct ? ` (${slowPct}% slower)` : ""}</p>
       <div class="comparison">
         ${routePanel("Your route", state.legs, state.totalSec)}
-        ${routePanel("Fastest route", precomputedLegs(optimal), optimal.totalSec)}
+        ${routePanel("Fastest route", optimalLegs, optimal.totalSec, optimal)}
       </div>
       <div class="toolbar">
         <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === DAILY_COUNT ? "Summary" : "Next puzzle"}</button>
@@ -595,6 +652,7 @@ function renderResult() {
 function giveUp() {
   const puzzle = currentPuzzle();
   const optimal = puzzle.optimalRoute;
+  const optimalLegs = precomputedLegs(optimal);
   state.results[state.puzzleIndex] = {
     score: 0,
     totalSec: null,
@@ -613,7 +671,7 @@ function giveUp() {
         <div class="scorebox"><span>Fastest time</span><strong>${formatTime(optimal.totalSec)}</strong></div>
         <div class="scorebox"><span>Transfers</span><strong>${optimal.transferCount}</strong></div>
       </div>
-      ${routePanel("Fastest route", precomputedLegs(optimal), optimal.totalSec)}
+      ${routePanel("Fastest route", optimalLegs, optimal.totalSec, optimal)}
       <div class="toolbar">
         <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === DAILY_COUNT ? "Summary" : "Next puzzle"}</button>
       </div>

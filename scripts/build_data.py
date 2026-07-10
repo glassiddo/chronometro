@@ -721,11 +721,121 @@ class Router:
 
         return self.dijkstra(source, target, extra_edges)
 
+    def runtime_between(self, direction_id: str, from_station: str, to_station: str) -> int | None:
+        direction = self.directions[direction_id]
+        try:
+            from_index = direction["stations"].index(from_station)
+            to_index = direction["stations"].index(to_station)
+        except ValueError:
+            return None
+        if to_index <= from_index:
+            return None
+        return sum(direction["runtimes"][from_index:to_index])
+
+    def add_timing_breakdown(
+        self,
+        legs: list[dict],
+        route_nodes: list[str] | None = None,
+        leg_start_indices: list[int] | None = None,
+        leg_end_indices: list[int] | None = None,
+    ) -> dict[str, int]:
+        totals = {"rideSec": 0, "waitSec": 0, "transferSec": 0}
+        previous = None
+        for leg_index, leg in enumerate(legs):
+            route = self.routes[leg["routeId"]]
+            ride_sec = self.runtime_between(leg["directionId"], leg["from"], leg["to"])
+            if ride_sec is None:
+                ride_sec = 0
+            wait_sec = 0
+            transfer_sec = 0
+            if route_nodes is not None and leg_start_indices is not None and leg_end_indices is not None:
+                start_index = leg_start_indices[leg_index]
+                previous_end_index = leg_end_indices[leg_index - 1] if leg_index > 0 else None
+                if previous_end_index is None:
+                    first_node = self.nodes[route_nodes[0]]
+                    wait_sec += self.wait_seconds(first_node["dirId"], first_node["routeId"], first_node["mode"])
+                    transition_start = 1
+                else:
+                    transition_start = previous_end_index + 1
+                for route_node_index in range(transition_start, start_index + 1):
+                    from_node = self.nodes[route_nodes[route_node_index - 1]]
+                    to_node = self.nodes[route_nodes[route_node_index]]
+                    if from_node["dirId"] == to_node["dirId"]:
+                        hidden_ride = self.runtime_between(
+                            from_node["dirId"],
+                            from_node["stationId"],
+                            to_node["stationId"],
+                        )
+                        ride_sec += hidden_ride if hidden_ride is not None else 0
+                        continue
+                    to_route = self.routes[to_node["routeId"]]
+                    transfer = self.transfer_walk(
+                        from_node["stationId"],
+                        to_node["stationId"],
+                        from_node["routeId"],
+                        to_node["routeId"],
+                        from_node["mode"],
+                        to_node["mode"],
+                    )
+                    transfer_sec += transfer if transfer is not None else 0
+                    wait_sec += self.wait_seconds(to_node["dirId"], to_node["routeId"], to_route["mode"])
+            elif previous is not None:
+                wait_sec = self.wait_seconds(leg["directionId"], leg["routeId"], route["mode"])
+                previous_route = self.routes[previous["routeId"]]
+                transfer = self.transfer_walk(
+                    previous["to"],
+                    leg["from"],
+                    previous["routeId"],
+                    leg["routeId"],
+                    previous_route["mode"],
+                    route["mode"],
+                )
+                transfer_sec = transfer if transfer is not None else 0
+            else:
+                wait_sec = self.wait_seconds(leg["directionId"], leg["routeId"], route["mode"])
+            leg["rideSec"] = int(ride_sec)
+            leg["waitSec"] = int(wait_sec)
+            leg["transferSec"] = int(transfer_sec)
+            leg["elapsedSec"] = leg["rideSec"] + leg["waitSec"] + leg["transferSec"]
+            totals["rideSec"] += leg["rideSec"]
+            totals["waitSec"] += leg["waitSec"]
+            totals["transferSec"] += leg["transferSec"]
+            previous = leg
+        return totals
+
+    def connection_breakdown(self, route_nodes: list[str], from_index: int, to_index: int) -> dict[str, int]:
+        totals = {"rideSec": 0, "waitSec": 0, "transferSec": 0}
+        for route_node_index in range(from_index + 1, to_index + 1):
+            from_node = self.nodes[route_nodes[route_node_index - 1]]
+            to_node = self.nodes[route_nodes[route_node_index]]
+            if from_node["dirId"] == to_node["dirId"]:
+                ride_sec = self.runtime_between(
+                    from_node["dirId"],
+                    from_node["stationId"],
+                    to_node["stationId"],
+                )
+                totals["rideSec"] += ride_sec if ride_sec is not None else 0
+                continue
+            to_route = self.routes[to_node["routeId"]]
+            transfer = self.transfer_walk(
+                from_node["stationId"],
+                to_node["stationId"],
+                from_node["routeId"],
+                to_node["routeId"],
+                from_node["mode"],
+                to_node["mode"],
+            )
+            totals["transferSec"] += transfer if transfer is not None else 0
+            totals["waitSec"] += self.wait_seconds(to_node["dirId"], to_node["routeId"], to_route["mode"])
+        return totals
+
     def describe_path(self, cost: int, path: list[str]) -> dict | None:
         route_nodes = [node for node in path if node in self.nodes]
         if not route_nodes:
             return None
         legs = []
+        leg_start_indices = []
+        leg_end_indices = []
         index = 0
         while index < len(route_nodes):
             first = self.nodes[route_nodes[index]]
@@ -742,6 +852,8 @@ class Router:
                 end_station = self.nodes[route_nodes[end_index]]["stationId"]
             if start_station != end_station:
                 route = self.routes[direction["routeId"]]
+                leg_start_indices.append(index)
+                leg_end_indices.append(end_index)
                 legs.append(
                     {
                         "routeId": route["id"],
@@ -758,8 +870,16 @@ class Router:
             index = end_index + 1
         if not legs:
             return None
+        totals = self.add_timing_breakdown(legs, route_nodes, leg_start_indices, leg_end_indices)
+        if leg_end_indices[-1] < len(route_nodes) - 1:
+            trailing_totals = self.connection_breakdown(route_nodes, leg_end_indices[-1], len(route_nodes) - 1)
+            for key, seconds in trailing_totals.items():
+                totals[key] += seconds
         return {
             "totalSec": int(cost),
+            "rideSec": totals["rideSec"],
+            "waitSec": totals["waitSec"],
+            "transferSec": totals["transferSec"],
             "transferCount": max(0, len(legs) - 1),
             "signature": "|".join(
                 f"{leg['routeId']}:{leg['directionId']}:{leg['from']}:{leg['to']}" for leg in legs
