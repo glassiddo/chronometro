@@ -917,29 +917,43 @@ class Router:
         route_nodes = [node for node in path if node in self.nodes]
         if not route_nodes:
             return None
+        steps = []
         legs = []
-        leg_start_indices = []
-        leg_end_indices = []
-        index = 0
-        while index < len(route_nodes):
-            first = self.nodes[route_nodes[index]]
-            direction = self.directions[first["dirId"]]
-            start_station = first["stationId"]
-            end_station = start_station
-            end_index = index
-            while end_index + 1 < len(route_nodes):
-                current = self.nodes[route_nodes[end_index]]
-                following = self.nodes[route_nodes[end_index + 1]]
-                if following["dirId"] != current["dirId"]:
-                    break
-                end_index += 1
-                end_station = self.nodes[route_nodes[end_index]]["stationId"]
-            if start_station != end_station:
-                route = self.routes[direction["routeId"]]
-                leg_start_indices.append(index)
-                leg_end_indices.append(end_index)
-                legs.append(
-                    {
+        totals = {"rideSec": 0, "waitSec": 0, "transferSec": 0}
+        pending_wait = self.wait_seconds(
+            self.nodes[route_nodes[0]]["dirId"],
+            self.nodes[route_nodes[0]]["routeId"],
+            self.nodes[route_nodes[0]]["mode"],
+        )
+        pending_transfer = 0
+        current_ride = None
+
+        def flush_ride() -> None:
+            nonlocal current_ride
+            if current_ride is None:
+                return
+            current_ride["rideSec"] = int(current_ride["rideSec"])
+            current_ride["waitSec"] = int(current_ride["waitSec"])
+            current_ride["transferSec"] = int(current_ride["transferSec"])
+            current_ride["elapsedSec"] = (
+                current_ride["rideSec"] + current_ride["waitSec"] + current_ride["transferSec"]
+            )
+            steps.append(current_ride)
+            legs.append(current_ride)
+            totals["rideSec"] += current_ride["rideSec"]
+            totals["waitSec"] += current_ride["waitSec"]
+            totals["transferSec"] += current_ride["transferSec"]
+            current_ride = None
+
+        for route_node_index in range(1, len(route_nodes)):
+            from_node = self.nodes[route_nodes[route_node_index - 1]]
+            to_node = self.nodes[route_nodes[route_node_index]]
+            if from_node["dirId"] == to_node["dirId"]:
+                if current_ride is None:
+                    direction = self.directions[from_node["dirId"]]
+                    route = self.routes[direction["routeId"]]
+                    current_ride = {
+                        "type": "ride",
                         "routeId": route["id"],
                         "line": route["label"],
                         "mode": route["mode"],
@@ -947,18 +961,69 @@ class Router:
                         "textColor": route["textColor"],
                         "directionId": direction["id"],
                         "direction": direction["label"],
-                        "from": start_station,
-                        "to": end_station,
+                        "from": from_node["stationId"],
+                        "to": from_node["stationId"],
+                        "rideSec": 0,
+                        "waitSec": pending_wait,
+                        "transferSec": pending_transfer,
                     }
+                    pending_wait = 0
+                    pending_transfer = 0
+                hidden_ride = self.runtime_between(
+                    from_node["dirId"],
+                    from_node["stationId"],
+                    to_node["stationId"],
                 )
-            index = end_index + 1
+                current_ride["rideSec"] += hidden_ride if hidden_ride is not None else 0
+                current_ride["to"] = to_node["stationId"]
+                continue
+
+            flush_ride()
+            to_route = self.routes[to_node["routeId"]]
+            transfer = self.transfer_walk(
+                from_node["stationId"],
+                to_node["stationId"],
+                from_node["routeId"],
+                to_node["routeId"],
+                from_node["mode"],
+                to_node["mode"],
+            )
+            pending_transfer += transfer if transfer is not None else 0
+            pending_wait += self.wait_seconds(to_node["dirId"], to_node["routeId"], to_route["mode"])
+            if from_node["stationId"] != to_node["stationId"] and transfer is not None:
+                walk_step = {
+                    "type": "walk",
+                    "from": from_node["stationId"],
+                    "to": to_node["stationId"],
+                    "rideSec": 0,
+                    "waitSec": 0,
+                    "transferSec": int(transfer),
+                    "elapsedSec": int(transfer),
+                }
+                steps.append(walk_step)
+                totals["transferSec"] += walk_step["transferSec"]
+                pending_transfer -= transfer
+
+        flush_ride()
+        if pending_wait or pending_transfer:
+            # A route may end after a transfer edge into the destination station.
+            # Keep the graph cost visible without inventing a zero-length ride.
+            if steps:
+                steps[-1]["transferSec"] += int(pending_transfer + pending_wait)
+                steps[-1]["elapsedSec"] += int(pending_transfer + pending_wait)
+                totals["transferSec"] += int(pending_transfer + pending_wait)
+            pending_wait = 0
+            pending_transfer = 0
+
         if not legs:
             return None
-        totals = self.add_timing_breakdown(legs, route_nodes, leg_start_indices, leg_end_indices)
-        if leg_end_indices[-1] < len(route_nodes) - 1:
-            trailing_totals = self.connection_breakdown(route_nodes, leg_end_indices[-1], len(route_nodes) - 1)
-            for key, seconds in trailing_totals.items():
-                totals[key] += seconds
+
+        total_from_steps = sum(step["elapsedSec"] for step in steps)
+        if total_from_steps != int(cost) and steps:
+            delta = int(cost) - total_from_steps
+            steps[-1]["transferSec"] += delta
+            steps[-1]["elapsedSec"] += delta
+            totals["transferSec"] += delta
         return {
             "totalSec": int(cost),
             "rideSec": totals["rideSec"],
@@ -966,9 +1031,15 @@ class Router:
             "transferSec": totals["transferSec"],
             "transferCount": max(0, len(legs) - 1),
             "signature": "|".join(
-                f"{leg['routeId']}:{leg['directionId']}:{leg['from']}:{leg['to']}" for leg in legs
+                (
+                    f"walk:{step['from']}:{step['to']}"
+                    if step.get("type") == "walk"
+                    else f"ride:{step['routeId']}:{step['directionId']}:{step['from']}:{step['to']}"
+                )
+                for step in steps
             ),
             "legs": legs,
+            "steps": steps,
         }
 
 

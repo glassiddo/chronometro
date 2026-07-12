@@ -39,17 +39,64 @@ def same_station(data: dict, left_id: str, right_id: str) -> bool:
 def verify_optimal_breakdowns(data: dict) -> None:
     for puzzle in data["puzzles"]:
         optimal = puzzle["optimalRoute"]
+        steps = optimal.get("steps")
+        require(steps, f"{puzzle['id']} missing optimalRoute.steps")
         route_total = optimal["rideSec"] + optimal["waitSec"] + optimal["transferSec"]
         require(
             optimal["totalSec"] == route_total,
             f"{puzzle['id']} optimal total mismatch: {optimal['totalSec']} != {route_total}",
         )
-        for index, leg in enumerate(optimal["legs"], start=1):
-            leg_total = leg["rideSec"] + leg["waitSec"] + leg["transferSec"]
+        step_elapsed = sum(step["elapsedSec"] for step in steps)
+        require(
+            optimal["totalSec"] == step_elapsed,
+            f"{puzzle['id']} step total mismatch: {optimal['totalSec']} != {step_elapsed}",
+        )
+        for key in ("rideSec", "waitSec", "transferSec"):
+            step_total = sum(step[key] for step in steps)
             require(
-                leg["elapsedSec"] == leg_total,
-                f"{puzzle['id']} leg {index} elapsed mismatch: {leg['elapsedSec']} != {leg_total}",
+                optimal[key] == step_total,
+                f"{puzzle['id']} {key} step mismatch: {optimal[key]} != {step_total}",
             )
+        require(steps[0]["from"] == puzzle["start"], f"{puzzle['id']} first step does not start at puzzle start")
+        require(
+            steps[-1]["to"] == puzzle["end"] or same_station(data, steps[-1]["to"], puzzle["end"]),
+            f"{puzzle['id']} last step does not end at destination or equivalent station",
+        )
+        first_ride = next((step for step in steps if step.get("type", "ride") == "ride"), None)
+        require(first_ride is not None, f"{puzzle['id']} has no ride step")
+        if first_ride["from"] != puzzle["start"]:
+            require(
+                steps[0].get("type") == "walk" and steps[0]["to"] == first_ride["from"],
+                f"{puzzle['id']} first ride starts away from puzzle start without explicit walk",
+            )
+        last_ride = next((step for step in reversed(steps) if step.get("type", "ride") == "ride"), None)
+        if last_ride["to"] != puzzle["end"] and not same_station(data, last_ride["to"], puzzle["end"]):
+            require(
+                steps[-1].get("type") == "walk" and steps[-1]["from"] == last_ride["to"],
+                f"{puzzle['id']} final ride ends away from puzzle end without explicit walk",
+            )
+        for index, step in enumerate(steps, start=1):
+            step_total = step["rideSec"] + step["waitSec"] + step["transferSec"]
+            require(
+                step["elapsedSec"] == step_total,
+                f"{puzzle['id']} step {index} elapsed mismatch: {step['elapsedSec']} != {step_total}",
+            )
+            if step.get("type") == "walk" and step["from"] != step["to"]:
+                require(step["rideSec"] == 0 and step["waitSec"] == 0, f"{puzzle['id']} walk step {index} has ride/wait time")
+
+
+def verify_auteuil_case_if_present(data: dict) -> None:
+    for puzzle in data["puzzles"]:
+        start_name = data["stations"][puzzle["start"]]["name"]
+        end_name = data["stations"][puzzle["end"]]["name"]
+        if start_name != "Église d'Auteuil" or end_name != "Saint-Marcel":
+            continue
+        steps = puzzle["optimalRoute"]["steps"]
+        first = steps[0]
+        require(first.get("type") == "walk", "Église d'Auteuil -> Saint-Marcel must start with an explicit walk")
+        require(data["stations"][first["to"]]["name"] == "Mirabeau", "initial walk should go to Mirabeau")
+        require(330 <= first["transferSec"] <= 410, f"Mirabeau walk should be around 368s, got {first['transferSec']}")
+        return
 
 
 def verify_station_equivalents(data: dict) -> None:
@@ -76,6 +123,7 @@ def verify_station_equivalents(data: dict) -> None:
 def main() -> None:
     data = json.loads(DATA.read_text(encoding="utf-8"))
     verify_optimal_breakdowns(data)
+    verify_auteuil_case_if_present(data)
     verify_station_equivalents(data)
 
     chatelet = route_transfer(data, "PARIS208683", "PARIS208683", "8562", "15061")
@@ -93,6 +141,8 @@ def main() -> None:
     require("waitSecondsByDirection" in app and "waitSecondsByRoute" in app, "frontend does not use derived waits")
     require("routeTransfers" in app and "transferFallback" in app, "frontend does not use route transfer fallback rules")
     require("routeTimingTotals" in app and "rideSec" in app, "frontend does not expose timing breakdowns")
+    require("function addWalkStep(" in app and "walk:" in app, "frontend does not expose explicit walk steps")
+    require('"steps": steps' in build, "backend does not emit route steps")
     require("function canonicalStationId(" in app and "function sameStation(" in app, "frontend lacks canonical station helpers")
     require("sameStation(toStation, currentPuzzle().end)" in app, "frontend completion still uses raw station ids")
     require("sameStation(stationId, currentPuzzle().end)" in app, "frontend destination labels still use raw station ids")

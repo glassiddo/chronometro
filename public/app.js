@@ -6,7 +6,7 @@ const state = {
   daily: [],
   puzzleIndex: 0,
   currentStation: null,
-  legs: [],
+  steps: [],
   totalSec: 0,
   stage: "line",
   selected: {},
@@ -88,6 +88,10 @@ function formatLegBreakdown(leg) {
   return parts.length ? parts.join(" · ") : "";
 }
 
+function stepType(step) {
+  return step.type || "ride";
+}
+
 function parisDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Paris",
@@ -152,21 +156,33 @@ function currentPuzzle() {
   return state.daily[state.puzzleIndex];
 }
 
-function renderRouteList(legs, { showDirection = true } = {}) {
-  if (!legs.length) return `<p class="muted">No legs yet.</p>`;
-  return legs
+function renderRouteList(steps, { showDirection = true } = {}) {
+  if (!steps.length) return `<p class="muted">No steps yet.</p>`;
+  return steps
     .map(
-      (leg) => {
-        const detail = formatLegBreakdown(leg);
-        return `
-        <div class="leg-chip">
-          ${lineBadge(leg.routeId)}
+      (step) => {
+        const detail = formatLegBreakdown(step);
+        if (stepType(step) === "walk") {
+          return `
+        <div class="leg-chip walk-chip">
+          <span class="walk-badge">Walk</span>
           <p>
-            <strong>${escapeHtml(station(leg.from).name)} -> ${escapeHtml(station(leg.to).name)}</strong>
-            ${showDirection ? `<small>Direction ${escapeHtml(direction(leg.directionId).label)}</small>` : ""}
+            <strong>Walk to ${escapeHtml(station(step.to).name)}</strong>
             ${detail ? `<small class="leg-detail">${escapeHtml(detail)}</small>` : ""}
           </p>
-          <small>${Number.isFinite(leg.elapsedSec) && leg.elapsedSec > 0 ? formatTime(leg.elapsedSec) : ""}</small>
+          <small>${Number.isFinite(step.elapsedSec) && step.elapsedSec > 0 ? formatTime(step.elapsedSec) : ""}</small>
+        </div>
+      `;
+        }
+        return `
+        <div class="leg-chip">
+          ${lineBadge(step.routeId)}
+          <p>
+            <strong>${escapeHtml(station(step.from).name)} -> ${escapeHtml(station(step.to).name)}</strong>
+            ${showDirection ? `<small>Direction ${escapeHtml(direction(step.directionId).label)}</small>` : ""}
+            ${detail ? `<small class="leg-detail">${escapeHtml(detail)}</small>` : ""}
+          </p>
+          <small>${Number.isFinite(step.elapsedSec) && step.elapsedSec > 0 ? formatTime(step.elapsedSec) : ""}</small>
         </div>
       `;
       },
@@ -2032,7 +2048,7 @@ function boardShell(content) {
         <p class="intro-prompt">Build the fastest route from Départ to Arrivée. Choose a line, direction, and stop; transfers and waits count.</p>
         <div>
           <h3>Your route</h3>
-          <div class="route-list">${renderRouteList(state.legs)}</div>
+          <div class="route-list">${renderRouteList(state.steps)}</div>
         </div>
       </aside>
       <section class="workspace">${content}</section>
@@ -2065,14 +2081,45 @@ function transferSeconds(fromStation, toStation, fromRouteId, toRouteId, fromMod
   return null;
 }
 
+function lastRideStep() {
+  for (let index = state.steps.length - 1; index >= 0; index -= 1) {
+    if (stepType(state.steps[index]) === "ride") return state.steps[index];
+  }
+  return null;
+}
+
+function explicitWalkSeconds(fromStation, toStation, nextRouteId = null) {
+  if (fromStation === toStation) return 0;
+  const previous = lastRideStep();
+  if (previous && nextRouteId) {
+    const previousRoute = route(previous.routeId);
+    const nextRoute = route(nextRouteId);
+    const routeSpecific = transferSeconds(
+      fromStation,
+      toStation,
+      previous.routeId,
+      nextRouteId,
+      previousRoute.mode,
+      nextRoute.mode,
+    );
+    if (Number.isFinite(routeSpecific)) return routeSpecific;
+  }
+  const explicit = state.data.transfers[fromStation]?.[toStation];
+  return Number.isFinite(explicit) ? explicit : null;
+}
+
+function walkOptions() {
+  return Object.entries(state.data.transfers[state.currentStation] || {})
+    .filter(([stationId, walkSec]) => stationId !== state.currentStation && Number.isFinite(walkSec))
+    .map(([stationId, walkSec]) => ({ stationId, walkSec }))
+    .sort((a, b) => a.walkSec - b.walkSec || compareText(station(a.stationId).name, station(b.stationId).name));
+}
+
 function boardingOptions() {
   const origins = [{ stationId: state.currentStation, walkSec: 0 }];
-  if (state.legs.length) {
-    const transfers = state.data.transfers[state.currentStation] || {};
-    Object.entries(transfers).forEach(([stationId, walkSec]) => {
-      if (state.data.stations[stationId]?.services) origins.push({ stationId, walkSec });
-    });
-  }
+  walkOptions().forEach(({ stationId, walkSec }) => {
+    if (state.data.stations[stationId]?.services) origins.push({ stationId, walkSec });
+  });
 
   const byRoute = new Map();
   const seen = new Set();
@@ -2113,11 +2160,28 @@ function boardingOptions() {
 function renderLineStep(message = "") {
   state.stage = "line";
   const options = boardingOptions();
+  const walks = walkOptions();
   boardShell(`
     <div class="step-title">
       <h2>Choose a line</h2>
       <span>From ${escapeHtml(station(state.currentStation).name)}</span>
     </div>
+    ${
+      walks.length
+        ? `<div class="choice-grid">
+      ${walks
+        .map(
+          (option, index) => `
+            <button class="choice" data-walk-index="${index}">
+              <strong>Walk to ${escapeHtml(station(option.stationId).name)}</strong>
+              <small>Transfer ${formatCompactTime(option.walkSec)}</small>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>`
+        : ""
+    }
     <div class="choice-grid">
       ${options
         .map((option, index) => {
@@ -2126,7 +2190,7 @@ function renderLineStep(message = "") {
           const boardsHere = bestBoard.boardStation === state.currentStation;
           const walk =
             boardsHere
-              ? state.legs.length
+              ? state.steps.length
                 ? "Transfer here"
                 : "Board here"
               : `Walk about ${formatCompactTime(bestBoard.walkSec)} to ${escapeHtml(station(bestBoard.boardStation).name)}`;
@@ -2148,6 +2212,11 @@ function renderLineStep(message = "") {
     button.addEventListener("click", () => {
       state.selected = options[Number(button.dataset.lineIndex)];
       renderDirectionStep();
+    });
+  });
+  document.querySelectorAll("[data-walk-index]").forEach((button) => {
+    button.addEventListener("click", () => {
+      addWalkStep(walks[Number(button.dataset.walkIndex)].stationId);
     });
   });
   bindPuzzleToolbar();
@@ -2189,7 +2258,7 @@ function renderDirectionStep() {
               <strong>${escapeHtml(dir.label)}</strong>
               <small>${
                 option.boardStation === state.currentStation
-                  ? state.legs.length
+                  ? state.steps.length
                     ? "Transfer here"
                     : "Board here"
                   : `After ${formatCompactTime(option.walkSec)} walk from ${escapeHtml(station(state.currentStation).name)}`
@@ -2278,8 +2347,8 @@ function legTiming(selected, toStation, rideSec) {
   const r = route(selected.routeId);
   const waitSec = waitSeconds(selected.directionId, selected.routeId, r.mode);
   let transferSec = 0;
-  if (state.legs.length) {
-    const previous = state.legs[state.legs.length - 1];
+  const previous = lastRideStep();
+  if (previous && selected.boardStation === state.currentStation) {
     const previousMode = route(previous.routeId).mode;
     const transfer = transferSeconds(
       state.currentStation,
@@ -2300,6 +2369,35 @@ function legTiming(selected, toStation, rideSec) {
   };
 }
 
+function addWalkStep(toStation, nextRouteId = null, { renderAfter = true } = {}) {
+  const fromStation = state.currentStation;
+  const transferSec = explicitWalkSeconds(fromStation, toStation, nextRouteId);
+  if (!Number.isFinite(transferSec) || transferSec <= 0) {
+    renderLineStep("There is no walking transfer link between those stations in the feed.");
+    return false;
+  }
+  const step = {
+    type: "walk",
+    from: fromStation,
+    to: toStation,
+    rideSec: 0,
+    waitSec: 0,
+    transferSec,
+    elapsedSec: transferSec,
+  };
+  state.steps.push(step);
+  state.totalSec += transferSec;
+  state.currentStation = toStation;
+  state.selected = {};
+  if (!renderAfter) return true;
+  if (sameStation(toStation, currentPuzzle().end)) {
+    renderResult();
+  } else {
+    renderLineStep();
+  }
+  return true;
+}
+
 function addLeg(toStation) {
   const selected = state.selected;
   const runSec = runtimeBetween(selected.directionId, selected.boardStation, toStation);
@@ -2314,14 +2412,20 @@ function addLeg(toStation) {
     return;
   }
 
+  if (selected.boardStation !== state.currentStation) {
+    const walked = addWalkStep(selected.boardStation, selected.routeId, { renderAfter: false });
+    if (!walked) return;
+  }
+
   const leg = {
+    type: "ride",
     routeId: selected.routeId,
     directionId: selected.directionId,
     from: selected.boardStation,
     to: toStation,
     ...timing,
   };
-  state.legs.push(leg);
+  state.steps.push(leg);
   state.totalSec += timing.elapsedSec;
   state.currentStation = toStation;
   state.selected = {};
@@ -2333,8 +2437,14 @@ function addLeg(toStation) {
   }
 }
 
-function routeSignature(legs) {
-  return legs.map((leg) => `${leg.routeId}:${leg.directionId}:${leg.from}:${leg.to}`).join("|");
+function routeSignature(steps) {
+  return steps
+    .map((step) =>
+      stepType(step) === "walk"
+        ? `walk:${step.from}:${step.to}`
+        : `ride:${step.routeId}:${step.directionId}:${step.from}:${step.to}`,
+    )
+    .join("|");
 }
 
 function scoreRoute(puzzle, signature, totalSec) {
@@ -2357,13 +2467,13 @@ function scoreRoute(puzzle, signature, totalSec) {
   return { score, label: "Slow route" };
 }
 
-function routeTimingTotals(legs, totalSec = null) {
-  const totals = legs.reduce(
-    (sum, leg) => ({
-      rideSec: sum.rideSec + (Number.isFinite(leg.rideSec) ? leg.rideSec : 0),
-      waitSec: sum.waitSec + (Number.isFinite(leg.waitSec) ? leg.waitSec : 0),
-      transferSec: sum.transferSec + (Number.isFinite(leg.transferSec) ? leg.transferSec : 0),
-      totalSec: sum.totalSec + (Number.isFinite(leg.elapsedSec) ? leg.elapsedSec : 0),
+function routeTimingTotals(steps, totalSec = null) {
+  const totals = steps.reduce(
+    (sum, step) => ({
+      rideSec: sum.rideSec + (Number.isFinite(step.rideSec) ? step.rideSec : 0),
+      waitSec: sum.waitSec + (Number.isFinite(step.waitSec) ? step.waitSec : 0),
+      transferSec: sum.transferSec + (Number.isFinite(step.transferSec) ? step.transferSec : 0),
+      totalSec: sum.totalSec + (Number.isFinite(step.elapsedSec) ? step.elapsedSec : 0),
     }),
     { rideSec: 0, waitSec: 0, transferSec: 0, totalSec: 0 },
   );
@@ -2382,39 +2492,40 @@ function routeBreakdownMarkup(totals) {
   `;
 }
 
-function routePanel(title, legs, totalSec, timing = null) {
-  const totals = timing || routeTimingTotals(legs, totalSec);
+function routePanel(title, steps, totalSec, timing = null) {
+  const totals = timing || routeTimingTotals(steps, totalSec);
   return `
     <div class="route-panel">
       <h3>${escapeHtml(title)} <small>${formatTime(totalSec)}</small></h3>
       ${routeBreakdownMarkup(totals)}
-      <div class="route-list">${renderRouteList(legs, { showDirection: false })}</div>
+      <div class="route-list">${renderRouteList(steps, { showDirection: false })}</div>
     </div>
   `;
 }
 
-function precomputedLegs(routeInfo) {
-  return routeInfo.legs.map((leg) => ({
-    routeId: leg.routeId,
-    directionId: leg.directionId,
-    from: leg.from,
-    to: leg.to,
-    rideSec: leg.rideSec,
-    waitSec: leg.waitSec,
-    transferSec: leg.transferSec,
-    elapsedSec: leg.elapsedSec,
+function precomputedSteps(routeInfo) {
+  return (routeInfo.steps || routeInfo.legs).map((step) => ({
+    type: step.type || "ride",
+    routeId: step.routeId,
+    directionId: step.directionId,
+    from: step.from,
+    to: step.to,
+    rideSec: step.rideSec,
+    waitSec: step.waitSec,
+    transferSec: step.transferSec,
+    elapsedSec: step.elapsedSec,
   }));
 }
 
 function renderResult() {
   const puzzle = currentPuzzle();
-  const signature = routeSignature(state.legs);
+  const signature = routeSignature(state.steps);
   const scored = scoreRoute(puzzle, signature, state.totalSec);
   const optimal = puzzle.optimalRoute;
-  const optimalLegs = precomputedLegs(optimal);
+  const optimalSteps = precomputedSteps(optimal);
   const deltaSec = Math.max(0, state.totalSec - optimal.totalSec);
   const slowPct = optimal.totalSec ? Math.round((deltaSec / optimal.totalSec) * 100) : 0;
-  const transferCount = Math.max(0, state.legs.length - 1);
+  const transferCount = Math.max(0, state.steps.filter((step) => stepType(step) === "ride").length - 1);
   state.results[state.puzzleIndex] = {
     score: scored.score,
     totalSec: state.totalSec,
@@ -2435,8 +2546,8 @@ function renderResult() {
       </div>
       <p class="result-note">${escapeHtml(formatSignedTime(deltaSec))}${slowPct ? ` (${slowPct}% slower)` : ""}</p>
       <div class="comparison">
-        ${routePanel("Your route", state.legs, state.totalSec)}
-        ${routePanel("Fastest route", optimalLegs, optimal.totalSec, optimal)}
+        ${routePanel("Your route", state.steps, state.totalSec)}
+        ${routePanel("Fastest route", optimalSteps, optimal.totalSec, optimal)}
       </div>
       <div class="toolbar">
         <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === DAILY_COUNT ? "Summary" : "Next puzzle"}</button>
@@ -2449,7 +2560,7 @@ function renderResult() {
 function giveUp() {
   const puzzle = currentPuzzle();
   const optimal = puzzle.optimalRoute;
-  const optimalLegs = precomputedLegs(optimal);
+  const optimalSteps = precomputedSteps(optimal);
   state.results[state.puzzleIndex] = {
     score: 0,
     totalSec: null,
@@ -2468,7 +2579,7 @@ function giveUp() {
         <div class="scorebox"><span>Fastest time</span><strong>${formatTime(optimal.totalSec)}</strong></div>
         <div class="scorebox"><span>Transfers</span><strong>${optimal.transferCount}</strong></div>
       </div>
-      ${routePanel("Fastest route", optimalLegs, optimal.totalSec, optimal)}
+      ${routePanel("Fastest route", optimalSteps, optimal.totalSec, optimal)}
       <div class="toolbar">
         <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === DAILY_COUNT ? "Summary" : "Next puzzle"}</button>
       </div>
@@ -2555,7 +2666,7 @@ function restartDay() {
 function startPuzzle() {
   state.stage = "line";
   state.currentStation = currentPuzzle().start;
-  state.legs = [];
+  state.steps = [];
   state.totalSec = 0;
   state.selected = {};
   state.hintText = "";
