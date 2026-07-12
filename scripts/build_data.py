@@ -22,7 +22,9 @@ import heapq
 import json
 import math
 import random
+import re
 import sys
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 from statistics import median
@@ -62,6 +64,9 @@ TRANSFER_DEFAULTS = {
     "fallback": 300,
 }
 
+STATION_EQUIVALENCE_DISTANCE_M = 150
+STATION_EQUIVALENCE_TRANSFER_SECONDS = 120
+
 PARIS_CITY_BOUNDS = {
     "min_lat": 48.815,
     "max_lat": 48.902,
@@ -77,6 +82,28 @@ def log(message: str) -> None:
 def read_csv(name: str):
     path = GTFS / name
     return csv.DictReader(path.open("r", encoding="utf-8-sig", newline=""))
+
+
+def normalized_station_name(value: str) -> str:
+    folded = unicodedata.normalize("NFKD", value or "")
+    ascii_text = "".join(char for char in folded if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", re.sub(r"[^\w]+", " ", ascii_text.casefold())).strip()
+
+
+def station_distance_m(left: dict, right: dict) -> float | None:
+    lat1 = left.get("lat")
+    lon1 = left.get("lon")
+    lat2 = right.get("lat")
+    lon2 = right.get("lon")
+    if not all(isinstance(value, (int, float)) for value in [lat1, lon1, lat2, lon2]):
+        return None
+    radius_m = 6_371_000
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+    hav = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    return 2 * radius_m * math.atan2(math.sqrt(hav), math.sqrt(1 - hav))
 
 
 def read_weekday_services() -> set[str]:
@@ -564,6 +591,63 @@ def read_route_transfers(
     }
 
 
+def build_station_equivalents(
+    stations: dict[str, dict],
+    transfers: dict[str, dict[str, int]],
+) -> tuple[dict[str, str], list[list[str]]]:
+    parents = {station_id: station_id for station_id in stations}
+
+    def find(station_id: str) -> str:
+        parent = parents[station_id]
+        if parent != station_id:
+            parents[station_id] = find(parent)
+        return parents[station_id]
+
+    def union(left: str, right: str) -> None:
+        left_root = find(left)
+        right_root = find(right)
+        if left_root == right_root:
+            return
+        canonical = min(left_root, right_root)
+        other = right_root if canonical == left_root else left_root
+        parents[other] = canonical
+
+    by_name: dict[str, list[str]] = defaultdict(list)
+    for station_id, meta in stations.items():
+        normalized = normalized_station_name(meta.get("name", ""))
+        if normalized:
+            by_name[normalized].append(station_id)
+
+    for ids in by_name.values():
+        if len(ids) < 2:
+            continue
+        sorted_ids = sorted(ids)
+        for index, left in enumerate(sorted_ids):
+            for right in sorted_ids[index + 1 :]:
+                distance = station_distance_m(stations[left], stations[right])
+                short_transfer = min(
+                    transfers.get(left, {}).get(right, sys.maxsize),
+                    transfers.get(right, {}).get(left, sys.maxsize),
+                )
+                close_enough = distance is not None and distance <= STATION_EQUIVALENCE_DISTANCE_M
+                short_enough = short_transfer <= STATION_EQUIVALENCE_TRANSFER_SECONDS
+                if close_enough or short_enough:
+                    union(left, right)
+
+    grouped: dict[str, list[str]] = defaultdict(list)
+    for station_id in sorted(stations):
+        grouped[find(station_id)].append(station_id)
+
+    station_equivalents = [ids for ids in grouped.values() if len(ids) > 1]
+    canonical_station_ids = {
+        station_id: min(ids)
+        for ids in station_equivalents
+        for station_id in ids
+    }
+    log(f"built {len(station_equivalents)} station equivalence groups")
+    return canonical_station_ids, station_equivalents
+
+
 class Router:
     def __init__(
         self,
@@ -916,6 +1000,16 @@ def is_puzzle_endpoint(station: dict) -> bool:
     return "metro" in modes or ("rer" in modes and is_central_rer_station(station))
 
 
+def optimal_route_edge_count(optimal_route: dict, directions: dict[str, dict]) -> int:
+    edge_count = 0
+    for leg in optimal_route["legs"]:
+        stations = directions[leg["directionId"]]["stations"]
+        from_index = stations.index(leg["from"])
+        to_index = stations.index(leg["to"])
+        edge_count += to_index - from_index
+    return edge_count
+
+
 def build_puzzle_pool(router: Router, stations: dict[str, dict]) -> list[dict]:
     station_ids = [
         station_id
@@ -942,6 +1036,8 @@ def build_puzzle_pool(router: Router, stations: dict[str, dict]) -> list[dict]:
             continue
         optimal_route = router.describe_path(*fastest)
         if not optimal_route or optimal_route["transferCount"] < 1:
+            continue
+        if optimal_route_edge_count(optimal_route, router.directions) <= 3:
             continue
         pool.append(
             {
@@ -972,6 +1068,7 @@ def main() -> None:
     stations = {station_id: all_station_meta[station_id] for station_id in sorted(used_stations)}
     build_station_services(stations, routes, directions)
     transfers = read_transfers(stop_to_station, set(stations))
+    canonical_station_ids, station_equivalents = build_station_equivalents(stations, transfers)
 
     used_routes = sorted({direction["routeId"] for direction in directions.values()})
     routes = {route_id: routes[route_id] for route_id in used_routes}
@@ -1019,6 +1116,8 @@ def main() -> None:
         "routes": routes,
         "directions": directions,
         "stations": stations,
+        "canonicalStationIds": canonical_station_ids,
+        "stationEquivalents": station_equivalents,
         "transfers": transfers,
         "routeTransfers": route_transfers,
         "puzzles": pool,

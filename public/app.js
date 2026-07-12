@@ -21,6 +21,14 @@ function station(id) {
   return state.data.stations[id] || { id, name: id };
 }
 
+function canonicalStationId(stationId) {
+  return state.data.canonicalStationIds?.[stationId] || stationId;
+}
+
+function sameStation(leftId, rightId) {
+  return canonicalStationId(leftId) === canonicalStationId(rightId);
+}
+
 function route(id) {
   return state.data.routes[id];
 }
@@ -170,7 +178,7 @@ function finalStationLineHint() {
   const puzzle = currentPuzzle();
   const lines = new Map();
   Object.values(state.data.directions).forEach((dir) => {
-    if (!dir.stations.includes(puzzle.end)) return;
+    if (!dir.stations.some((stationId) => sameStation(stationId, puzzle.end))) return;
     const r = route(dir.routeId);
     lines.set(dir.routeId, `${modeName(r.mode)} ${r.label}`);
   });
@@ -1949,7 +1957,7 @@ function mapMarker(stationId, label, className) {
 function orientationMapMarkup() {
   const puzzle = currentPuzzle();
   const current =
-    state.currentStation && state.currentStation !== puzzle.start && state.currentStation !== puzzle.end
+    state.currentStation && !sameStation(state.currentStation, puzzle.start) && !sameStation(state.currentStation, puzzle.end)
       ? mapMarker(state.currentStation, "Current", "current-marker")
       : "";
   return `
@@ -2239,9 +2247,9 @@ function renderAlightStep() {
       ${choices
         .map(
           (stationId) => `
-            <button class="choice stop-choice${stationId === currentPuzzle().end ? " destination-choice" : ""}" data-alight="${escapeHtml(stationId)}">
+            <button class="choice stop-choice${sameStation(stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(stationId)}">
               <strong>${escapeHtml(station(stationId).name)}</strong>
-              <small>${stationId === currentPuzzle().end ? "Destination" : "Get off here"}</small>
+              <small>${sameStation(stationId, currentPuzzle().end) ? "Destination" : "Get off here"}</small>
               ${stopSignals(stationId)}
             </button>
           `,
@@ -2318,7 +2326,7 @@ function addLeg(toStation) {
   state.currentStation = toStation;
   state.selected = {};
 
-  if (toStation === currentPuzzle().end) {
+  if (sameStation(toStation, currentPuzzle().end)) {
     renderResult();
   } else {
     renderLineStep();
