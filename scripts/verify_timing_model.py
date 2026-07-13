@@ -14,6 +14,7 @@ APP = ROOT / "public" / "app.js"
 BUILD = ROOT / "scripts" / "build_data.py"
 EXPECTED_PUZZLE_COUNT = 150
 MIN_PUZZLE_ROUTE_DISTANCE_M = 1000
+MIN_PUZZLE_ENDPOINT_DISTANCE_M = 1500
 
 
 def require(condition: bool, message: str) -> None:
@@ -80,6 +81,11 @@ def verify_puzzle_pool_constraints(data: dict) -> None:
     )
     for puzzle in data["puzzles"]:
         optimal = puzzle["optimalRoute"]
+        endpoint_distance_m = station_distance_m(data["stations"][puzzle["start"]], data["stations"][puzzle["end"]])
+        require(
+            endpoint_distance_m >= MIN_PUZZLE_ENDPOINT_DISTANCE_M,
+            f"{puzzle['id']} endpoints are only {endpoint_distance_m:.1f}m apart",
+        )
         edge_count = optimal_route_edge_count(data, optimal)
         require(edge_count > 3, f"{puzzle['id']} optimal route has only {edge_count} edges")
         distance_m = optimal_route_distance_m(data, optimal)

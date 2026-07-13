@@ -38,6 +38,7 @@ MAX_DIRECTIONS_PER_ROUTE = 18
 PUZZLE_POOL_SIZE = 150
 PUZZLE_ATTEMPTS = 10000
 MIN_PUZZLE_ROUTE_DISTANCE_M = 1000
+MIN_PUZZLE_ENDPOINT_DISTANCE_M = 1500
 RER_LABELS = {"A", "B", "C", "D", "E"}
 
 WAIT_BY_MODE = {
@@ -1119,6 +1120,9 @@ def build_puzzle_pool(router: Router, stations: dict[str, dict]) -> list[dict]:
         seen_pairs.add(pair_key)
         if stations[start]["name"] == stations[end]["name"]:
             continue
+        endpoint_distance_m = station_distance_m(stations[start], stations[end])
+        if endpoint_distance_m is None or endpoint_distance_m < MIN_PUZZLE_ENDPOINT_DISTANCE_M:
+            continue
 
         fastest = router.fastest_path(start, end)
         if not fastest:
@@ -1203,6 +1207,7 @@ def main() -> None:
                 "No pathways.txt, disruptions, live data, or time-of-day routing are used.",
                 "Puzzle pairs are filtered so the fastest route requires at least one line change.",
                 "Puzzle pairs are filtered so the fastest route is at least 1 km.",
+                "Puzzle pairs are filtered so endpoints are at least 1.5 km apart as the crow flies.",
                 "Puzzle endpoints are restricted to metro-served stations plus RER stations within Paris city bounds.",
             ],
         },

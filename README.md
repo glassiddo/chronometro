@@ -43,7 +43,7 @@ Expected waits are static and deterministic: the generator derives median schedu
 
 Each puzzle stores an `optimalRoute` object with the fastest route and `totalSec` optimal time. Scoring is based on the player's time delta against that fastest route.
 
-Puzzle start/end stations are restricted to metro-served stations plus RER stations within central Paris bounds, while the full metro/RER/tram graph remains available for route legs. Pairs are filtered out if their fastest route has fewer than 4 transit edges or is under 1 km. RER direction labels are normalized to terminal station names, and duplicate skip-stop variants for the same RER terminal are removed in favor of the longest local-style stopping pattern. For branched metro lines, branch-specific patterns remain in the data, but the UI collapses duplicate terminal labels so players see each destination once.
+Puzzle start/end stations are restricted to metro-served stations plus RER stations within central Paris bounds, while the full metro/RER/tram graph remains available for route legs. Pairs are filtered out if their endpoints are under 1.5 km apart, their fastest route has fewer than 4 transit edges, or their fastest route is under 1 km. RER direction labels are normalized to terminal station names, and duplicate skip-stop variants for the same RER terminal are removed in favor of the longest local-style stopping pattern. For branched metro lines, branch-specific patterns remain in the data, but the UI collapses duplicate terminal labels so players see each destination once.
 
 ## Play locally
 
