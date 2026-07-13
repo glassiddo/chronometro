@@ -35,8 +35,9 @@ GTFS = ROOT / "gouv_paris_gtfs-export"
 OUT = ROOT / "public" / "data" / "metro-express-data.json"
 
 MAX_DIRECTIONS_PER_ROUTE = 18
-PUZZLE_POOL_SIZE = 75
-PUZZLE_ATTEMPTS = 5000
+PUZZLE_POOL_SIZE = 150
+PUZZLE_ATTEMPTS = 10000
+MIN_PUZZLE_ROUTE_DISTANCE_M = 1000
 RER_LABELS = {"A", "B", "C", "D", "E"}
 
 WAIT_BY_MODE = {
@@ -1081,6 +1082,23 @@ def optimal_route_edge_count(optimal_route: dict, directions: dict[str, dict]) -
     return edge_count
 
 
+def optimal_route_distance_m(optimal_route: dict, directions: dict[str, dict], stations: dict[str, dict]) -> float | None:
+    total = 0.0
+    for leg in optimal_route["legs"]:
+        direction_stations = directions[leg["directionId"]]["stations"]
+        from_index = direction_stations.index(leg["from"])
+        to_index = direction_stations.index(leg["to"])
+        for left_id, right_id in zip(
+            direction_stations[from_index:to_index],
+            direction_stations[from_index + 1 : to_index + 1],
+        ):
+            distance = station_distance_m(stations[left_id], stations[right_id])
+            if distance is None:
+                return None
+            total += distance
+    return total
+
+
 def build_puzzle_pool(router: Router, stations: dict[str, dict]) -> list[dict]:
     station_ids = [
         station_id
@@ -1109,6 +1127,9 @@ def build_puzzle_pool(router: Router, stations: dict[str, dict]) -> list[dict]:
         if not optimal_route or optimal_route["transferCount"] < 1:
             continue
         if optimal_route_edge_count(optimal_route, router.directions) <= 3:
+            continue
+        route_distance_m = optimal_route_distance_m(optimal_route, router.directions, stations)
+        if route_distance_m is None or route_distance_m < MIN_PUZZLE_ROUTE_DISTANCE_M:
             continue
         pool.append(
             {
@@ -1181,6 +1202,7 @@ def main() -> None:
                 "Waits use half of derived median scheduled peak headway, with direction, route, then mode fallbacks.",
                 "No pathways.txt, disruptions, live data, or time-of-day routing are used.",
                 "Puzzle pairs are filtered so the fastest route requires at least one line change.",
+                "Puzzle pairs are filtered so the fastest route is at least 1 km.",
                 "Puzzle endpoints are restricted to metro-served stations plus RER stations within Paris city bounds.",
             ],
         },

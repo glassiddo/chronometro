@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 
@@ -11,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "public" / "data" / "metro-express-data.json"
 APP = ROOT / "public" / "app.js"
 BUILD = ROOT / "scripts" / "build_data.py"
+EXPECTED_PUZZLE_COUNT = 150
+MIN_PUZZLE_ROUTE_DISTANCE_M = 1000
 
 
 def require(condition: bool, message: str) -> None:
@@ -34,6 +37,56 @@ def canonical_station_id(data: dict, station_id: str) -> str:
 
 def same_station(data: dict, left_id: str, right_id: str) -> bool:
     return canonical_station_id(data, left_id) == canonical_station_id(data, right_id)
+
+
+def station_distance_m(left: dict, right: dict) -> float:
+    radius_m = 6_371_000
+    phi1 = math.radians(left["lat"])
+    phi2 = math.radians(right["lat"])
+    d_phi = math.radians(right["lat"] - left["lat"])
+    d_lambda = math.radians(right["lon"] - left["lon"])
+    hav = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    return 2 * radius_m * math.atan2(math.sqrt(hav), math.sqrt(1 - hav))
+
+
+def optimal_route_edge_count(data: dict, optimal_route: dict) -> int:
+    edge_count = 0
+    for leg in optimal_route["legs"]:
+        stations = data["directions"][leg["directionId"]]["stations"]
+        from_index = stations.index(leg["from"])
+        to_index = stations.index(leg["to"])
+        edge_count += to_index - from_index
+    return edge_count
+
+
+def optimal_route_distance_m(data: dict, optimal_route: dict) -> float:
+    total = 0.0
+    for leg in optimal_route["legs"]:
+        direction_stations = data["directions"][leg["directionId"]]["stations"]
+        from_index = direction_stations.index(leg["from"])
+        to_index = direction_stations.index(leg["to"])
+        for left_id, right_id in zip(
+            direction_stations[from_index:to_index],
+            direction_stations[from_index + 1 : to_index + 1],
+        ):
+            total += station_distance_m(data["stations"][left_id], data["stations"][right_id])
+    return total
+
+
+def verify_puzzle_pool_constraints(data: dict) -> None:
+    require(
+        len(data["puzzles"]) == EXPECTED_PUZZLE_COUNT,
+        f"expected {EXPECTED_PUZZLE_COUNT} puzzles, got {len(data['puzzles'])}",
+    )
+    for puzzle in data["puzzles"]:
+        optimal = puzzle["optimalRoute"]
+        edge_count = optimal_route_edge_count(data, optimal)
+        require(edge_count > 3, f"{puzzle['id']} optimal route has only {edge_count} edges")
+        distance_m = optimal_route_distance_m(data, optimal)
+        require(
+            distance_m >= MIN_PUZZLE_ROUTE_DISTANCE_M,
+            f"{puzzle['id']} optimal route is only {distance_m:.1f}m",
+        )
 
 
 def verify_optimal_breakdowns(data: dict) -> None:
@@ -122,6 +175,7 @@ def verify_station_equivalents(data: dict) -> None:
 
 def main() -> None:
     data = json.loads(DATA.read_text(encoding="utf-8"))
+    verify_puzzle_pool_constraints(data)
     verify_optimal_breakdowns(data)
     verify_auteuil_case_if_present(data)
     verify_station_equivalents(data)

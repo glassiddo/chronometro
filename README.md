@@ -35,7 +35,7 @@ The current bundle contains:
 - 36 selected routes
 - 114 line/direction patterns
 - 762 playable stations
-- 75 eligible puzzle pairs, each with one precomputed fastest route
+- 150 eligible puzzle pairs, each with one precomputed fastest route
 
 Consecutive in-vehicle runtimes are averaged from `stop_times.txt`. Interchange times use raw child-stop `transfers.txt` route-pair minimums before station collapse, with documented mode-based fallbacks only for missing same-station transfers. `pathways.txt` is not used.
 
@@ -43,7 +43,7 @@ Expected waits are static and deterministic: the generator derives median schedu
 
 Each puzzle stores an `optimalRoute` object with the fastest route and `totalSec` optimal time. Scoring is based on the player's time delta against that fastest route.
 
-Puzzle start/end stations are restricted to metro-served stations plus RER stations within central Paris bounds, while the full metro/RER/tram graph remains available for route legs. RER direction labels are normalized to terminal station names, and duplicate skip-stop variants for the same RER terminal are removed in favor of the longest local-style stopping pattern. For branched metro lines, branch-specific patterns remain in the data, but the UI collapses duplicate terminal labels so players see each destination once.
+Puzzle start/end stations are restricted to metro-served stations plus RER stations within central Paris bounds, while the full metro/RER/tram graph remains available for route legs. Pairs are filtered out if their fastest route has fewer than 4 transit edges or is under 1 km. RER direction labels are normalized to terminal station names, and duplicate skip-stop variants for the same RER terminal are removed in favor of the longest local-style stopping pattern. For branched metro lines, branch-specific patterns remain in the data, but the UI collapses duplicate terminal labels so players see each destination once.
 
 ## Play locally
 
