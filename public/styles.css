@@ -170,6 +170,10 @@ h1 {
   background: #fbfaf4;
 }
 
+.map-toggle summary {
+  display: none;
+}
+
 .orientation-map svg {
   display: block;
   width: 100%;
@@ -237,6 +241,19 @@ h1 {
 .route-list {
   display: grid;
   gap: 10px;
+}
+
+.route-summary summary {
+  display: block;
+  margin: 0 0 1em;
+  font-size: 1.17em;
+  font-weight: bold;
+  list-style: none;
+  pointer-events: none;
+}
+
+.route-summary summary::-webkit-details-marker {
+  display: none;
 }
 
 .muted {
@@ -552,7 +569,7 @@ h1 {
 @media (max-width: 820px) {
   .shell {
     width: min(100vw - 20px, 680px);
-    padding-top: 14px;
+    padding: 14px 0 86px;
   }
 
   .masthead,
@@ -569,9 +586,184 @@ h1 {
     justify-items: start;
   }
 
+  .game {
+    padding-top: 14px;
+  }
+
+  .board {
+    gap: 12px;
+  }
+
+  .side {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .station-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .station {
+    min-width: 0;
+    border-left-width: 6px;
+    padding-left: 8px;
+  }
+
+  .station span {
+    font-size: 11px;
+  }
+
+  .station strong {
+    overflow-wrap: anywhere;
+    font-size: 18px;
+    line-height: 1.12;
+  }
+
+  .map-toggle summary,
+  .route-summary summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 36px;
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 7px 10px;
+    background: #fff;
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 900;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .map-toggle summary::after,
+  .route-summary summary::after {
+    content: "+";
+    flex: 0 0 auto;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .map-toggle[open] summary::after,
+  .route-summary[open] summary::after {
+    content: "-";
+  }
+
+  .orientation-map {
+    margin-top: 8px;
+  }
+
+  .orientation-map svg {
+    height: 118px;
+    aspect-ratio: auto;
+  }
+
+  .intro-prompt {
+    display: none;
+  }
+
+  .route-summary .route-list {
+    max-height: 172px;
+    margin-top: 8px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding-right: 2px;
+  }
+
+  .route-summary .muted {
+    margin: 0;
+    font-size: 14px;
+  }
+
+  .leg-chip {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 7px 0;
+  }
+
+  .leg-chip > small:last-child {
+    grid-column: 2;
+    justify-self: start;
+    min-width: 0;
+    text-align: left;
+  }
+
   .workspace {
     min-height: 0;
     padding: 14px;
+    padding-bottom: 220px;
+  }
+
+  .step-title {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+  }
+
+  .step-title h2 {
+    font-size: 24px;
+  }
+
+  .step-title span {
+    line-height: 1.25;
+  }
+
+  .choice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .choice {
+    min-width: 0;
+    min-height: 48px;
+    padding: 9px;
+    overflow-wrap: anywhere;
+  }
+
+  .choice strong,
+  .choice small {
+    min-width: 0;
+  }
+
+  .choice strong {
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  .choice small {
+    line-height: 1.25;
+  }
+
+  .stop-choice,
+  .choice:not(.line-choice) {
+    grid-template-columns: 1fr;
+  }
+
+  .line-choice {
+    align-content: center;
+  }
+
+  .toolbar {
+    position: sticky;
+    bottom: 10px;
+    z-index: 10;
+    margin: 14px -6px 0;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: rgba(255, 253, 248, .96);
+    box-shadow: 0 -4px 14px rgba(20, 20, 20, .08);
+  }
+
+  .action {
+    min-height: 44px;
+    flex: 1 1 142px;
+    padding: 0 10px;
+    white-space: normal;
   }
 
   .scoreboard {
@@ -589,5 +781,15 @@ h1 {
 
   .time-breakdown {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 460px) {
+  .choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .line-choice {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 }

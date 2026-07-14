@@ -1977,19 +1977,22 @@ function orientationMapMarkup() {
       ? mapMarker(state.currentStation, "Current", "current-marker")
       : "";
   return `
-    <figure class="orientation-map" aria-label="Paris orientation map showing start and destination stations">
-      <svg viewBox="0 0 ${PARIS_MAP.width} ${PARIS_MAP.height}" role="img" aria-labelledby="orientationMapTitle orientationMapDesc">
-        <title id="orientationMapTitle">Paris orientation map</title>
-        <desc id="orientationMapDesc">A simplified map of Paris with the Seine, the start station, and the destination station.</desc>
-        <rect class="map-bg" width="${PARIS_MAP.width}" height="${PARIS_MAP.height}" rx="6"></rect>
-        ${PARIS_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
-        <path class="paris-outline" d="${mapCurvePath(PARIS_MAP.outline, true)}"></path>
-        <path class="seine" d="${mapCurvePath(PARIS_MAP.seine)}"></path>
-        ${mapMarker(puzzle.start, "Start", "start-marker")}
-        ${mapMarker(puzzle.end, "End", "end-marker")}
-        ${current}
-      </svg>
-    </figure>
+    <details class="map-toggle" open>
+      <summary>Orientation map</summary>
+      <figure class="orientation-map" aria-label="Paris orientation map showing start and destination stations">
+        <svg viewBox="0 0 ${PARIS_MAP.width} ${PARIS_MAP.height}" role="img" aria-labelledby="orientationMapTitle orientationMapDesc">
+          <title id="orientationMapTitle">Paris orientation map</title>
+          <desc id="orientationMapDesc">A simplified map of Paris with the Seine, the start station, and the destination station.</desc>
+          <rect class="map-bg" width="${PARIS_MAP.width}" height="${PARIS_MAP.height}" rx="6"></rect>
+          ${PARIS_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
+          <path class="paris-outline" d="${mapCurvePath(PARIS_MAP.outline, true)}"></path>
+          <path class="seine" d="${mapCurvePath(PARIS_MAP.seine)}"></path>
+          ${mapMarker(puzzle.start, "Start", "start-marker")}
+          ${mapMarker(puzzle.end, "End", "end-marker")}
+          ${current}
+        </svg>
+      </figure>
+    </details>
   `;
 }
 
@@ -2046,14 +2049,36 @@ function boardShell(content) {
         </div>
         ${orientationMapMarkup()}
         <p class="intro-prompt">Build the fastest route from Départ to Arrivée. Choose a line, direction, and stop; transfers and waits count.</p>
-        <div>
-          <h3>Your route</h3>
+        <details class="route-summary" ${state.steps.length ? "open" : ""}>
+          <summary>Your route</summary>
           <div class="route-list">${renderRouteList(state.steps)}</div>
-        </div>
+        </details>
       </aside>
       <section class="workspace">${content}</section>
     </div>
   `;
+  bindResponsivePanels();
+}
+
+function bindResponsivePanels() {
+  const isMobile = () => window.matchMedia("(max-width: 820px)").matches;
+  document.querySelectorAll(".map-toggle, .route-summary").forEach((panel) => {
+    const summary = panel.querySelector("summary");
+    const keepDesktopOpen = (event) => {
+      if (isMobile()) return;
+      event.preventDefault();
+      panel.open = true;
+    };
+    if (isMobile()) {
+      if (panel.classList.contains("map-toggle")) panel.open = false;
+    } else {
+      panel.open = true;
+    }
+    summary.addEventListener("click", keepDesktopOpen);
+    summary.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") keepDesktopOpen(event);
+    });
+  });
 }
 
 function transferFallback(fromMode, toMode) {
