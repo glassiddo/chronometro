@@ -694,7 +694,6 @@ h1 {
   .workspace {
     min-height: 0;
     padding: 14px;
-    padding-bottom: 220px;
   }
 
   .step-title {
@@ -748,15 +747,7 @@ h1 {
   }
 
   .toolbar {
-    position: sticky;
-    bottom: 10px;
-    z-index: 10;
-    margin: 14px -6px 0;
-    padding: 8px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: rgba(255, 253, 248, .96);
-    box-shadow: 0 -4px 14px rgba(20, 20, 20, .08);
+    margin-top: 14px;
   }
 
   .action {
