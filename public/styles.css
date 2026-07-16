@@ -348,6 +348,24 @@ h1 {
   gap: 10px;
 }
 
+.choice-section {
+  display: grid;
+  gap: 8px;
+}
+
+.choice-section + .choice-section {
+  margin-top: 16px;
+}
+
+.choice-section h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .choice {
   min-height: 56px;
   border: 2px solid var(--rail);
@@ -422,6 +440,33 @@ h1 {
 .line-choice > span {
   display: grid;
   gap: 2px;
+}
+
+.walk-choice {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.walk-choice > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.walk-lines {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 4px;
+  max-width: 116px;
+}
+
+.walk-lines .line-badge {
+  min-width: 28px;
+  height: 22px;
+  padding: 0 6px;
+  border-width: 1px;
+  font-size: 12px;
 }
 
 .toolbar {
@@ -740,6 +785,14 @@ h1 {
   .stop-choice,
   .choice:not(.line-choice) {
     grid-template-columns: 1fr;
+  }
+
+  .walk-choice {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .walk-lines {
+    max-width: 78px;
   }
 
   .line-choice {

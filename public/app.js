@@ -2133,38 +2133,73 @@ function explicitWalkSeconds(fromStation, toStation, nextRouteId = null) {
 }
 
 function walkOptions() {
-  return Object.entries(state.data.transfers[state.currentStation] || {})
-    .filter(([stationId, walkSec]) => stationId !== state.currentStation && Number.isFinite(walkSec))
-    .map(([stationId, walkSec]) => ({ stationId, walkSec }))
-    .sort((a, b) => a.walkSec - b.walkSec || compareText(station(a.stationId).name, station(b.stationId).name));
+  const currentCanonical = canonicalStationId(state.currentStation);
+  const currentRouteIds = new Set(boardableRouteIds(state.currentStation));
+  const byCanonical = new Map();
+  Object.entries(state.data.transfers[state.currentStation] || {}).forEach(([stationId, walkSec]) => {
+    if (!Number.isFinite(walkSec)) return;
+    const canonicalId = canonicalStationId(stationId);
+    if (canonicalId === currentCanonical) return;
+    if (!boardableRouteIds(stationId).some((routeId) => !currentRouteIds.has(routeId))) return;
+    const option = { stationId, walkSec };
+    const existing = byCanonical.get(canonicalId);
+    if (
+      !existing ||
+      option.walkSec < existing.walkSec ||
+      (option.walkSec === existing.walkSec && compareText(station(option.stationId).name, station(existing.stationId).name) < 0)
+    ) {
+      byCanonical.set(canonicalId, option);
+    }
+  });
+  return [...byCanonical.values()].sort(
+    (a, b) => a.walkSec - b.walkSec || compareText(station(a.stationId).name, station(b.stationId).name),
+  );
+}
+
+function boardableRouteIds(stationId) {
+  const services = station(stationId).services || {};
+  return Object.entries(services)
+    .filter(([, directionIds]) =>
+      directionIds.some((dirId) => {
+        const dir = direction(dirId);
+        const index = dir.stations.indexOf(stationId);
+        return index >= 0 && index < dir.stations.length - 1;
+      }),
+    )
+    .map(([routeId]) => routeId)
+    .filter((routeId) => route(routeId))
+    .sort((a, b) => {
+      const ar = route(a);
+      const br = route(b);
+      return compareText(`${modeName(ar.mode)} ${ar.label}`, `${modeName(br.mode)} ${br.label}`);
+    });
+}
+
+function walkLineBadges(stationId) {
+  if (!state.showConnectingLines) return "";
+  const badges = boardableRouteIds(stationId).map(lineBadge).join("");
+  return badges ? `<span class="walk-lines" aria-label="Lines at ${escapeHtml(station(stationId).name)}">${badges}</span>` : "";
 }
 
 function boardingOptions() {
-  const origins = [{ stationId: state.currentStation, walkSec: 0 }];
-  walkOptions().forEach(({ stationId, walkSec }) => {
-    if (state.data.stations[stationId]?.services) origins.push({ stationId, walkSec });
-  });
-
   const byRoute = new Map();
   const seen = new Set();
-  origins.forEach((origin) => {
-    const services = station(origin.stationId).services || {};
-    Object.entries(services).forEach(([routeId, directionIds]) => {
-      const usable = directionIds.filter((dirId) => {
-        const dir = direction(dirId);
-        const index = dir.stations.indexOf(origin.stationId);
-        return index >= 0 && index < dir.stations.length - 1;
-      });
-      if (!usable.length) return;
-      const key = `${origin.stationId}:${routeId}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      if (!byRoute.has(routeId)) byRoute.set(routeId, { routeId, boards: [] });
-      byRoute.get(routeId).boards.push({
-        boardStation: origin.stationId,
-        walkSec: origin.walkSec,
-        directionIds: usable,
-      });
+  const services = station(state.currentStation).services || {};
+  Object.entries(services).forEach(([routeId, directionIds]) => {
+    const usable = directionIds.filter((dirId) => {
+      const dir = direction(dirId);
+      const index = dir.stations.indexOf(state.currentStation);
+      return index >= 0 && index < dir.stations.length - 1;
+    });
+    if (!usable.length) return;
+    const key = `${state.currentStation}:${routeId}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (!byRoute.has(routeId)) byRoute.set(routeId, { routeId, boards: [] });
+    byRoute.get(routeId).boards.push({
+      boardStation: state.currentStation,
+      walkSec: 0,
+      directionIds: usable,
     });
   });
 
@@ -2187,46 +2222,52 @@ function renderLineStep(message = "") {
   const walks = walkOptions();
   boardShell(`
     <div class="step-title">
-      <h2>Choose a line</h2>
+      <h2>Choose your next move</h2>
       <span>From ${escapeHtml(station(state.currentStation).name)}</span>
     </div>
     ${
-      walks.length
-        ? `<div class="choice-grid">
-      ${walks
-        .map(
-          (option, index) => `
-            <button class="choice" data-walk-index="${index}">
-              <strong>Walk to ${escapeHtml(station(option.stationId).name)}</strong>
-              <small>Transfer ${formatCompactTime(option.walkSec)}</small>
-            </button>
-          `,
-        )
-        .join("")}
-    </div>`
+      options.length
+        ? `<section class="choice-section">
+      <h3>Board here</h3>
+      <div class="choice-grid">
+        ${options
+          .map((option, index) => {
+            const r = route(option.routeId);
+            const transferLabel = state.steps.length ? "Transfer here" : "Board here";
+            return `
+              <button class="choice line-choice" data-line-index="${index}">
+                ${lineBadge(option.routeId)}
+                <span><strong>${escapeHtml(modeName(r.mode))} ${escapeHtml(r.label)}</strong> <small>${transferLabel}</small></span>
+              </button>
+            `;
+          })
+          .join("")}
+      </div>
+    </section>`
         : ""
     }
-    <div class="choice-grid">
-      ${options
-        .map((option, index) => {
-          const r = route(option.routeId);
-          const bestBoard = option.boards[0];
-          const boardsHere = bestBoard.boardStation === state.currentStation;
-          const walk =
-            boardsHere
-              ? state.steps.length
-                ? "Transfer here"
-                : "Board here"
-              : `Walk about ${formatCompactTime(bestBoard.walkSec)} to ${escapeHtml(station(bestBoard.boardStation).name)}`;
-          return `
-            <button class="choice line-choice" data-line-index="${index}">
-              ${lineBadge(option.routeId)}
-              <span><strong>${escapeHtml(modeName(r.mode))} ${escapeHtml(r.label)}</strong> <small>${walk}</small></span>
-            </button>
-          `;
-        })
-        .join("")}
-    </div>
+    ${
+      walks.length
+        ? `<section class="choice-section">
+      <h3>Walk first</h3>
+      <div class="choice-grid">
+        ${walks
+          .map(
+            (option, index) => `
+              <button class="choice walk-choice" data-walk-index="${index}">
+                <span>
+                  <strong>Walk to ${escapeHtml(station(option.stationId).name)}</strong>
+                  <small>${formatCompactTime(option.walkSec)} transfer</small>
+                </span>
+                ${walkLineBadges(option.stationId)}
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+    </section>`
+        : ""
+    }
     ${message ? `<p class="notice">${escapeHtml(message)}</p>` : ""}
     ${hintMarkup()}
     ${toolbarMarkup()}
