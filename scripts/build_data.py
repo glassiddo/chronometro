@@ -526,8 +526,7 @@ def build_waits(
 
 
 def read_transfers(stop_to_station: dict[str, str], used_stations: set[str]) -> dict[str, dict[str, int]]:
-    transfer_times: dict[str, dict[str, int]] = defaultdict(dict)
-    count = 0
+    transfer_samples: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
     for row in read_csv("transfers.txt"):
         from_station = stop_to_station.get(row.get("from_stop_id", ""), row.get("from_stop_id", ""))
         to_station = stop_to_station.get(row.get("to_stop_id", ""), row.get("to_stop_id", ""))
@@ -539,12 +538,18 @@ def read_transfers(stop_to_station: dict[str, str], used_stations: set[str]) -> 
             continue
         if seconds <= 0:
             continue
-        old = transfer_times[from_station].get(to_station)
-        if old is None or seconds < old:
-            transfer_times[from_station][to_station] = seconds
-            count += 1
-    log(f"kept {count} GTFS transfer pairs touching selected stations")
-    return {k: dict(v) for k, v in transfer_times.items()}
+        transfer_samples[from_station][to_station].append(seconds)
+    transfer_times = {
+        from_station: {
+            to_station: int(round(sum(samples) / len(samples)))
+            for to_station, samples in to_stations.items()
+        }
+        for from_station, to_stations in transfer_samples.items()
+    }
+    pair_count = sum(len(to_stations) for to_stations in transfer_times.values())
+    sample_count = sum(len(samples) for to_stations in transfer_samples.values() for samples in to_stations.values())
+    log(f"averaged {sample_count} GTFS transfer rows into {pair_count} station transfer pairs")
+    return transfer_times
 
 
 def read_route_transfers(
@@ -1202,7 +1207,8 @@ def main() -> None:
             },
             "notes": [
                 "Consecutive in-vehicle runtimes are averaged from stop_times.txt across selected trips.",
-                "Transfer times use raw transfers.txt child-stop route-pair minimums before parent-station collapse.",
+                "Station-pair transfer times average raw transfers.txt child-stop rows after station collapse.",
+                "Route-pair transfer times use raw transfers.txt child-stop route-pair minimums before station collapse.",
                 "Waits use half of derived median scheduled peak headway, with direction, route, then mode fallbacks.",
                 "No pathways.txt, disruptions, live data, or time-of-day routing are used.",
                 "Puzzle pairs are filtered so the fastest route requires at least one line change.",

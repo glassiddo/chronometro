@@ -37,7 +37,7 @@ The current bundle contains:
 - 762 playable stations
 - 250 eligible puzzle pairs, each with one precomputed fastest route
 
-Consecutive in-vehicle runtimes are averaged from `stop_times.txt`. Interchange times use raw child-stop `transfers.txt` route-pair minimums before station collapse, with documented mode-based fallbacks only for missing same-station transfers. `pathways.txt` is not used.
+Consecutive in-vehicle runtimes are averaged from `stop_times.txt`. Station-pair transfer times average raw child-stop `transfers.txt` rows after station collapse, while route-pair interchange times use raw child-stop route-pair minimums before station collapse. Documented mode-based fallbacks are used only for missing same-station transfers. `pathways.txt` is not used.
 
 Expected waits are static and deterministic: the generator derives median scheduled headways from typical weekday 07:00-10:00 peak departures in `trips.txt` / `stop_times.txt`, then stores half-headway waits by direction and route with mode defaults as fallbacks. Routing does not use the actual current date/time, disruptions, or live data.
 
