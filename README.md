@@ -35,7 +35,7 @@ The current bundle contains:
 - 36 selected routes
 - 114 line/direction patterns
 - 762 playable stations
-- 150 eligible puzzle pairs, each with one precomputed fastest route
+- 250 eligible puzzle pairs, each with one precomputed fastest route
 
 Consecutive in-vehicle runtimes are averaged from `stop_times.txt`. Interchange times use raw child-stop `transfers.txt` route-pair minimums before station collapse, with documented mode-based fallbacks only for missing same-station transfers. `pathways.txt` is not used.
 
