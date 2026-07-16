@@ -2048,7 +2048,6 @@ function boardShell(content) {
           <div class="station"><span>Arrivée</span><strong>${escapeHtml(station(puzzle.end).name)}</strong></div>
         </div>
         ${orientationMapMarkup()}
-        <p class="intro-prompt">Build the fastest route from Départ to Arrivée. Choose a line, direction, and stop; transfers and waits count.</p>
         <details class="route-summary" ${state.steps.length ? "open" : ""}>
           <summary>Your route</summary>
           <div class="route-list">${renderRouteList(state.steps)}</div>
@@ -2700,7 +2699,7 @@ function startPuzzle() {
 }
 
 async function init() {
-  $("#game").innerHTML = `<section class="summary"><h2>Loading</h2><p>Preparing the July 2026 Paris network.</p></section>`;
+  $("#game").innerHTML = "";
   $("#homeButton").addEventListener("click", () => {
     if (state.data) restartDay();
   });
