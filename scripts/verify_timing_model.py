@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "public" / "data" / "metro-express-data.json"
 APP = ROOT / "public" / "app.js"
 BUILD = ROOT / "scripts" / "build_data.py"
-EXPECTED_PUZZLE_COUNT = 250
+EXPECTED_PUZZLE_COUNT = 5000
 MIN_PUZZLE_ROUTE_DISTANCE_M = 1000
 MIN_PUZZLE_ENDPOINT_DISTANCE_M = 1500
 

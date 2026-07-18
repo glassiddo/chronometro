@@ -35,7 +35,7 @@ The current bundle contains:
 - 36 selected routes
 - 114 line/direction patterns
 - 762 playable stations
-- 250 eligible puzzle pairs, each with one precomputed fastest route
+- 5,000 eligible puzzle pairs, each with one precomputed fastest route, covering about 5% of all eligible ordered puzzle pairs
 
 Consecutive in-vehicle runtimes are averaged from `stop_times.txt`. Station-pair transfer times average raw child-stop `transfers.txt` rows after station collapse, while route-pair interchange times use raw child-stop route-pair minimums before station collapse. Documented mode-based fallbacks are used only for missing same-station transfers. `pathways.txt` is not used.
 
@@ -43,7 +43,7 @@ Expected waits are static and deterministic: the generator derives median schedu
 
 Each puzzle stores an `optimalRoute` object with the fastest route and `totalSec` optimal time. Scoring is based on the player's time delta against that fastest route.
 
-Puzzle start/end stations are restricted to metro-served stations plus RER stations within central Paris bounds, while the full metro/RER/tram graph remains available for route legs. Pairs are filtered out if their endpoints are under 1.5 km apart, their fastest route has fewer than 4 transit edges, or their fastest route is under 1 km. RER direction labels are normalized to terminal station names, and duplicate skip-stop variants for the same RER terminal are removed in favor of the longest local-style stopping pattern. For branched metro lines, branch-specific patterns remain in the data, but the UI collapses duplicate terminal labels so players see each destination once.
+Puzzle start/end stations are restricted to metro-served stations plus RER stations within central Paris bounds, while the full metro/RER/tram graph remains available for route legs. With the current filters, there are 344 candidate endpoints, 117,992 possible ordered endpoint pairs, 58,996 unordered endpoint pairs, and 100,114 eligible ordered puzzle pairs. The generated JSON bundle is about 8.2 MB with 5,000 puzzles. Pairs are filtered out if their endpoints are under 1.5 km apart, their fastest route has fewer than 4 transit edges, or their fastest route is under 1 km. RER direction labels are normalized to terminal station names, and duplicate skip-stop variants for the same RER terminal are removed in favor of the longest local-style stopping pattern. For branched metro lines, branch-specific patterns remain in the data, but the UI collapses duplicate terminal labels so players see each destination once.
 
 ## Play locally
 
