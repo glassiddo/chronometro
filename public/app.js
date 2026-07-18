@@ -1978,7 +1978,7 @@ function orientationMapMarkup() {
       : "";
   return `
     <details class="map-toggle" open>
-      <summary>Orientation map</summary>
+      <summary>Map</summary>
       <figure class="orientation-map" aria-label="Paris orientation map showing start and destination stations">
         <svg viewBox="0 0 ${PARIS_MAP.width} ${PARIS_MAP.height}" role="img" aria-labelledby="orientationMapTitle orientationMapDesc">
           <title id="orientationMapTitle">Paris orientation map</title>
@@ -2068,9 +2068,7 @@ function bindResponsivePanels() {
       event.preventDefault();
       panel.open = true;
     };
-    if (isMobile()) {
-      if (panel.classList.contains("map-toggle")) panel.open = false;
-    } else {
+    if (!isMobile()) {
       panel.open = true;
     }
     summary.addEventListener("click", keepDesktopOpen);
