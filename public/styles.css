@@ -88,6 +88,15 @@ h1 {
   outline-offset: 4px;
 }
 
+.objective {
+  max-width: 540px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .date-lockup {
   display: grid;
   gap: 6px;
@@ -393,8 +402,36 @@ h1 {
   line-height: 1.25;
 }
 
+.stop-strip {
+  display: grid;
+  position: relative;
+  gap: 6px;
+  max-width: 760px;
+}
+
 .stop-choice {
-  align-content: start;
+  position: relative;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 9px 12px;
+}
+
+.stop-node {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--rail);
+  border-radius: 999px;
+  background: #fff;
+}
+
+.stop-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
 .destination-choice {
@@ -407,21 +444,36 @@ h1 {
   color: var(--ok);
 }
 
-.destination-choice > small {
+.destination-choice .stop-node {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+
+.destination-choice .stop-main > small {
   color: var(--ok);
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .stop-meta {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 8px;
+  min-width: 132px;
+}
+
+.stop-time {
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .transfer-lines {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  justify-content: end;
+  min-width: 0;
 }
 
 .transfer-lines .line-badge {
@@ -761,6 +813,10 @@ h1 {
     gap: 8px;
   }
 
+  .stop-strip {
+    max-width: none;
+  }
+
   .choice {
     min-width: 0;
     min-height: 48px;
@@ -782,9 +838,27 @@ h1 {
     line-height: 1.25;
   }
 
-  .stop-choice,
   .choice:not(.line-choice) {
     grid-template-columns: 1fr;
+  }
+
+  .stop-choice {
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 10px;
+    padding: 9px 10px;
+  }
+
+  .stop-meta {
+    grid-column: 2;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-items: start;
+    justify-content: start;
+    min-width: 0;
+  }
+
+  .transfer-lines {
+    justify-content: start;
   }
 
   .walk-choice {

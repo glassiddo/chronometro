@@ -63,13 +63,15 @@ function compareText(left, right) {
 function formatTime(sec) {
   const min = Math.floor(sec / 60);
   const rem = Math.round(sec % 60);
-  return rem ? `${min} min ${rem}s` : `${min} min`;
+  const minuteText = `${min} ${min === 1 ? "min" : "mins"}`;
+  return rem ? `${minuteText} ${rem}s` : minuteText;
 }
 
 function formatCompactTime(sec) {
   if (!Number.isFinite(sec) || sec <= 0) return "";
   if (sec < 60) return `${Math.round(sec)}s`;
-  return `${Math.round(sec / 60)} min`;
+  const min = Math.round(sec / 60);
+  return `${min} ${min === 1 ? "min" : "mins"}`;
 }
 
 function formatSignedTime(sec) {
@@ -156,12 +158,12 @@ function currentPuzzle() {
   return state.daily[state.puzzleIndex];
 }
 
-function renderRouteList(steps, { showDirection = true } = {}) {
+function renderRouteList(steps, { showDirection = true, showDetail = true } = {}) {
   if (!steps.length) return `<p class="muted">No steps yet.</p>`;
   return steps
     .map(
       (step) => {
-        const detail = formatLegBreakdown(step);
+        const detail = showDetail ? formatLegBreakdown(step) : "";
         if (stepType(step) === "walk") {
           return `
         <div class="leg-chip walk-chip">
@@ -2050,7 +2052,7 @@ function boardShell(content) {
         ${orientationMapMarkup()}
         <details class="route-summary" ${state.steps.length ? "open" : ""}>
           <summary>Your route</summary>
-          <div class="route-list">${renderRouteList(state.steps)}</div>
+          <div class="route-list">${renderRouteList(state.steps, { showDirection: false, showDetail: false })}</div>
         </details>
       </aside>
       <section class="workspace">${content}</section>
@@ -2365,8 +2367,8 @@ function renderAlightStep() {
       : "";
     return `
       <span class="stop-meta">
-        <small>${formatCompactTime(runSec)} ride</small>
         ${transferBadges ? `<span class="transfer-lines" aria-label="Transfer lines">${transferBadges}</span>` : ""}
+        <small class="stop-time">${formatCompactTime(runSec)}</small>
       </span>
     `;
   };
@@ -2375,13 +2377,16 @@ function renderAlightStep() {
       <h2>Choose your stop</h2>
       <span>${escapeHtml(r.label)} toward ${escapeHtml(dir.label)}</span>
     </div>
-    <div class="choice-grid">
+    <div class="stop-strip" aria-label="${escapeHtml(r.label)} stops toward ${escapeHtml(dir.label)}">
       ${choices
         .map(
           (stationId) => `
             <button class="choice stop-choice${sameStation(stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(stationId)}">
-              <strong>${escapeHtml(station(stationId).name)}</strong>
-              <small>${sameStation(stationId, currentPuzzle().end) ? "Destination" : "Get off here"}</small>
+              <span class="stop-node" aria-hidden="true"></span>
+              <span class="stop-main">
+                <strong>${escapeHtml(station(stationId).name)}</strong>
+                ${sameStation(stationId, currentPuzzle().end) ? "<small>Destination</small>" : ""}
+              </span>
               ${stopSignals(stationId)}
             </button>
           `,
