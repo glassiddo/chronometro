@@ -1,9 +1,14 @@
-const DATA_URL = "./data/metro-express-data.json";
-const DAILY_COUNT = 5;
+const NETWORK_URL = "./data/metro-express-network.json";
+const DAILY_INDEX_URL = "./data/daily/index.json";
+const DAILY_BASE_URL = "./data/daily";
+const EXAMPLE_URL = "./data/example/metro-express-example-data.json";
+const FALLBACK_DAILY_COUNT = 5;
 
 const state = {
   data: null,
   daily: [],
+  dailyDate: "",
+  dailyKind: "",
   puzzleIndex: 0,
   currentStation: null,
   steps: [],
@@ -125,14 +130,8 @@ function rng(seed) {
   };
 }
 
-function dailyPuzzles(data) {
-  const random = rng(hashString(`metro-express:${parisDateString()}`));
-  const indices = data.puzzles.map((_, index) => index);
-  for (let i = indices.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(random() * (i + 1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  return indices.slice(0, DAILY_COUNT).map((index) => data.puzzles[index]);
+function puzzleCount() {
+  return state.daily.length || FALLBACK_DAILY_COUNT;
 }
 
 function lineBadge(routeId) {
@@ -149,9 +148,9 @@ function escapeHtml(value) {
 }
 
 function setRoundLabel() {
-  $("#todayLabel").textContent = parisDateString();
+  $("#todayLabel").textContent = state.dailyDate || parisDateString();
   $("#roundLabel").textContent =
-    state.stage === "summary" ? "Done" : `${state.puzzleIndex + 1} / ${DAILY_COUNT}`;
+    state.stage === "summary" ? "Done" : `${state.puzzleIndex + 1} / ${puzzleCount()}`;
 }
 
 function currentPuzzle() {
@@ -2618,7 +2617,7 @@ function renderResult() {
         ${routePanel("Fastest route", optimalSteps, optimal.totalSec, optimal)}
       </div>
       <div class="toolbar">
-        <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === DAILY_COUNT ? "Summary" : "Next puzzle"}</button>
+        <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === puzzleCount() ? "Summary" : "Next puzzle"}</button>
       </div>
     </div>
   `);
@@ -2649,7 +2648,7 @@ function giveUp() {
       </div>
       ${routePanel("Fastest route", optimalSteps, optimal.totalSec, optimal)}
       <div class="toolbar">
-        <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === DAILY_COUNT ? "Summary" : "Next puzzle"}</button>
+        <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === puzzleCount() ? "Summary" : "Next puzzle"}</button>
       </div>
     </div>
   `);
@@ -2657,7 +2656,7 @@ function giveUp() {
 }
 
 function goNextPuzzle() {
-  if (state.puzzleIndex + 1 === DAILY_COUNT) {
+  if (state.puzzleIndex + 1 === puzzleCount()) {
     renderSummary();
   } else {
     state.puzzleIndex += 1;
@@ -2670,7 +2669,7 @@ function shareScores() {
 }
 
 function shareText(total) {
-  return `Métro Express ${parisDateString()}\n${total}/500\nScores: ${shareScores()}`;
+  return `Métro Express ${state.dailyDate || parisDateString()}\n${total}/${puzzleCount() * 100}\nScores: ${shareScores()}`;
 }
 
 async function copyText(text) {
@@ -2704,8 +2703,8 @@ function renderSummary() {
       <h2>Terminus</h2>
       <div class="scoreboard">
         <div class="scorebox"><span>Total score</span><strong>${total}</strong></div>
-        <div class="scorebox"><span>Puzzles</span><strong>${DAILY_COUNT}</strong></div>
-        <div class="scorebox"><span>Max score</span><strong>500</strong></div>
+        <div class="scorebox"><span>Puzzles</span><strong>${puzzleCount()}</strong></div>
+        <div class="scorebox"><span>Max score</span><strong>${puzzleCount() * 100}</strong></div>
       </div>
       <div class="share">${escapeHtml(share)}</div>
       <div class="toolbar">
@@ -2742,15 +2741,73 @@ function startPuzzle() {
   renderLineStep();
 }
 
+async function fetchJson(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function playablePuzzles(data, limit = null) {
+  const puzzles = (data?.puzzles || []).filter(
+    (puzzle) => puzzle.playable !== false && Number.isFinite(puzzle.optimalRoute?.totalSec),
+  );
+  return limit ? puzzles.slice(0, limit) : puzzles;
+}
+
+function nearestDailyDate(dates, target) {
+  if (!dates?.length) return null;
+  if (dates.includes(target)) return target;
+  const targetMs = Date.parse(`${target}T00:00:00Z`);
+  return dates
+    .slice()
+    .sort((left, right) => {
+      const leftDelta = Math.abs(Date.parse(`${left}T00:00:00Z`) - targetMs);
+      const rightDelta = Math.abs(Date.parse(`${right}T00:00:00Z`) - targetMs);
+      return leftDelta - rightDelta || left.localeCompare(right);
+    })[0];
+}
+
+async function loadPuzzleSet() {
+  const today = parisDateString();
+  const index = await fetchJson(DAILY_INDEX_URL);
+  const dailyDate = nearestDailyDate(index?.dates, today) || today;
+  const dailyData = await fetchJson(`${DAILY_BASE_URL}/${dailyDate}.json`);
+  const dailyPuzzles = playablePuzzles(dailyData);
+  if (dailyPuzzles.length) {
+    return {
+      date: dailyData?.metadata?.date || dailyDate,
+      kind: dailyData?.metadata?.kind || "daily-puzzles",
+      puzzles: dailyPuzzles,
+    };
+  }
+
+  const exampleData = await fetchJson(EXAMPLE_URL);
+  const examplePuzzles = playablePuzzles(exampleData, FALLBACK_DAILY_COUNT);
+  if (examplePuzzles.length) {
+    return {
+      date: today,
+      kind: exampleData?.metadata?.kind || "example-dev-puzzles",
+      puzzles: examplePuzzles,
+    };
+  }
+  throw new Error("Puzzle load failed");
+}
+
 async function init() {
   $("#game").innerHTML = "";
   $("#homeButton").addEventListener("click", () => {
     if (state.data) restartDay();
   });
-  const response = await fetch(DATA_URL);
-  if (!response.ok) throw new Error("Data load failed");
-  state.data = await response.json();
-  state.daily = dailyPuzzles(state.data);
+  state.data = await fetchJson(NETWORK_URL);
+  if (!state.data) throw new Error("Network load failed");
+  const puzzleSet = await loadPuzzleSet();
+  state.daily = puzzleSet.puzzles;
+  state.dailyDate = puzzleSet.date;
+  state.dailyKind = puzzleSet.kind;
   startPuzzle();
 }
 

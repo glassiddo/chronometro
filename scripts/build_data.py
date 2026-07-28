@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Build the static data bundle for Metro Express.
 
 Source feed:
@@ -17,6 +17,7 @@ Route filtering verified against this export:
 
 from __future__ import annotations
 
+import argparse
 import csv
 import heapq
 import json
@@ -26,20 +27,29 @@ import re
 import sys
 import unicodedata
 from collections import Counter, defaultdict
+from datetime import date, timedelta
 from pathlib import Path
 from statistics import median
 
 
 ROOT = Path(__file__).resolve().parents[1]
 GTFS = ROOT / "gouv_paris_gtfs-export"
-OUT = ROOT / "public" / "data" / "metro-express-data.json"
+DATA_DIR = ROOT / "public" / "data"
+NETWORK_OUT = DATA_DIR / "metro-express-network.json"
+ALL_PAIRS_OUT = DATA_DIR / "generated" / "metro-express-all-pairs.json"
+EXAMPLE_OUT = DATA_DIR / "example" / "metro-express-example-data.json"
+DAILY_DIR = DATA_DIR / "daily"
+DAILY_INDEX_OUT = DAILY_DIR / "index.json"
 
 MAX_DIRECTIONS_PER_ROUTE = 18
-PUZZLE_POOL_SIZE = 5000
-PUZZLE_ATTEMPTS = 50000
 MIN_PUZZLE_ROUTE_DISTANCE_M = 1000
 MIN_PUZZLE_ENDPOINT_DISTANCE_M = 1500
 RER_LABELS = {"A", "B", "C", "D", "E"}
+DEFAULT_START_DATE = "2026-07-28"
+DEFAULT_DAYS = 365
+DEFAULT_DAILY_COUNT = 5
+DEFAULT_EXAMPLE_COUNT = 100
+ALL_PAIRS_PROGRESS_INTERVAL = 1000
 
 WAIT_BY_MODE = {
     "metro": 120,
@@ -84,6 +94,37 @@ def log(message: str) -> None:
 def read_csv(name: str):
     path = GTFS / name
     return csv.DictReader(path.open("r", encoding="utf-8-sig", newline=""))
+
+
+def write_json(path: Path, data: dict | list) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+
+
+def file_size_mb(path: Path) -> float:
+    return path.stat().st_size / (1024 * 1024)
+
+
+def read_feed_metadata() -> dict[str, str]:
+    def gtfs_date(value: str, fallback: str) -> str:
+        if re.fullmatch(r"\d{8}", value or ""):
+            return f"{value[:4]}-{value[4:6]}-{value[6:8]}"
+        return value or fallback
+
+    try:
+        row = next(read_csv("feed_info.txt"))
+    except (FileNotFoundError, StopIteration):
+        row = {}
+    return {
+        "generatedFrom": "gouv_paris_gtfs-export",
+        "publisher": "ITO World modified GTFS export derived from Ile-de-France Mobilites",
+        "feedVersion": row.get("feed_version") or "20260630_200738",
+        "feedValidFrom": gtfs_date(row.get("feed_start_date", ""), "2026-06-27"),
+        "feedValidTo": gtfs_date(row.get("feed_end_date", ""), "2026-07-29"),
+    }
 
 
 def normalized_station_name(value: str) -> str:
@@ -1105,56 +1146,53 @@ def optimal_route_distance_m(optimal_route: dict, directions: dict[str, dict], s
     return total
 
 
-def build_puzzle_pool(router: Router, stations: dict[str, dict]) -> list[dict]:
-    station_ids = [
-        station_id
-        for station_id, station in stations.items()
-        if station.get("services") and is_puzzle_endpoint(station)
-    ]
-    log(f"candidate puzzle endpoints after central filter: {len(station_ids)}")
-    rng = random.Random("metro-express-july-2026-v1")
-    pool = []
-    seen_pairs = set()
-    attempts = 0
-    while len(pool) < PUZZLE_POOL_SIZE and attempts < PUZZLE_ATTEMPTS:
-        attempts += 1
-        start, end = rng.sample(station_ids, 2)
-        pair_key = (start, end)
-        if pair_key in seen_pairs:
-            continue
-        seen_pairs.add(pair_key)
-        if stations[start]["name"] == stations[end]["name"]:
-            continue
-        endpoint_distance_m = station_distance_m(stations[start], stations[end])
-        if endpoint_distance_m is None or endpoint_distance_m < MIN_PUZZLE_ENDPOINT_DISTANCE_M:
-            continue
-
-        fastest = router.fastest_path(start, end)
-        if not fastest:
-            continue
-        optimal_route = router.describe_path(*fastest)
-        if not optimal_route or optimal_route["transferCount"] < 1:
-            continue
-        if optimal_route_edge_count(optimal_route, router.directions) <= 3:
-            continue
-        route_distance_m = optimal_route_distance_m(optimal_route, router.directions, stations)
-        if route_distance_m is None or route_distance_m < MIN_PUZZLE_ROUTE_DISTANCE_M:
-            continue
-        pool.append(
-            {
-                "id": f"p{len(pool) + 1:03d}",
-                "start": start,
-                "end": end,
-                "optimalRoute": optimal_route,
-            }
-        )
-        if len(pool) % 25 == 0:
-            log(f"built {len(pool)} puzzle pairs after {attempts} attempts")
-    log(f"final puzzle pool: {len(pool)} pairs")
-    return pool
+def route_type_mapping_metadata() -> dict[str, str]:
+    return {
+        "0": "tram-like; kept labels beginning T only",
+        "1": "metro; kept all",
+        "2": "rail; kept RER A-E only",
+        "3": "bus; excluded for v1",
+        "6": "aerial lift/funicular-like; excluded",
+        "7": "funicular-like; excluded",
+    }
 
 
-def main() -> None:
+def network_metadata(
+    wait_by_direction: dict[str, int],
+    wait_by_route: dict[str, int],
+    extra: dict | None = None,
+) -> dict:
+    metadata = {
+        "title": "MÃ©tro Express",
+        **read_feed_metadata(),
+        "routeTypeMappingVerified": route_type_mapping_metadata(),
+        "transferFallbackSeconds": TRANSFER_DEFAULTS,
+        "waitSecondsByMode": WAIT_BY_MODE,
+        "waitSecondsByDirection": wait_by_direction,
+        "waitSecondsByRoute": wait_by_route,
+        "peakHeadwayWindow": {
+            "days": "typical weekday service from calendar.txt",
+            "start": "07:00:00",
+            "end": "10:00:00",
+            "expectedWait": "round(median_peak_headway / 2), clamped by mode",
+        },
+        "notes": [
+            "Consecutive in-vehicle runtimes are averaged from stop_times.txt across selected trips.",
+            "Station-pair transfer times average raw transfers.txt child-stop rows after station collapse.",
+            "Route-pair transfer times use raw transfers.txt child-stop route-pair minimums before station collapse.",
+            "Waits use half of derived median scheduled peak headway, with direction, route, then mode fallbacks.",
+            "No pathways.txt, disruptions, live data, or time-of-day routing are used.",
+            "Puzzle endpoints are restricted to metro-served stations plus RER stations within Paris city bounds.",
+            "Candidate pairs are ordered: A -> B and B -> A are distinct.",
+            "Bus routes are excluded for v1.",
+        ],
+    }
+    if extra:
+        metadata.update(extra)
+    return metadata
+
+
+def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
     routes = read_routes()
     stop_to_station, all_station_meta = read_stops()
     weekday_services = read_weekday_services()
@@ -1177,46 +1215,22 @@ def main() -> None:
     route_transfers = read_route_transfers(stop_to_station, raw_stop_routes, routes, set(stations))
 
     router = Router(stations, routes, directions, transfers, route_transfers, wait_by_direction, wait_by_route)
-    pool = build_puzzle_pool(router, stations)
+    endpoint_ids = sorted(
+        station_id
+        for station_id, station in stations.items()
+        if station.get("services") and is_puzzle_endpoint(station)
+    )
+    total_ordered_pairs = sum(
+        1
+        for start in endpoint_ids
+        for end in endpoint_ids
+        if start != end and stations[start]["name"] != stations[end]["name"]
+    )
+    log(f"candidate puzzle endpoints after central filter: {len(endpoint_ids)}")
+    log(f"ordered candidate pairs after same-name exclusion: {total_ordered_pairs:,}")
 
     data = {
-        "metadata": {
-        "title": "Métro Express",
-            "generatedFrom": "gouv_paris_gtfs-export",
-            "publisher": "ITO World modified GTFS export derived from Ile-de-France Mobilites",
-            "feedVersion": "20260630_200738",
-            "feedValidFrom": "2026-06-27",
-            "feedValidTo": "2026-07-29",
-            "routeTypeMappingVerified": {
-                "0": "tram-like; kept labels beginning T only",
-                "1": "metro; kept all",
-                "2": "rail; kept RER A-E only",
-                "3": "bus; excluded for v1",
-                "6": "aerial lift/funicular-like; excluded",
-                "7": "funicular-like; excluded",
-            },
-            "transferFallbackSeconds": TRANSFER_DEFAULTS,
-            "waitSecondsByMode": WAIT_BY_MODE,
-            "waitSecondsByDirection": wait_by_direction,
-            "waitSecondsByRoute": wait_by_route,
-            "peakHeadwayWindow": {
-                "days": "typical weekday service from calendar.txt",
-                "start": "07:00:00",
-                "end": "10:00:00",
-                "expectedWait": "round(median_peak_headway / 2), clamped by mode",
-            },
-            "notes": [
-                "Consecutive in-vehicle runtimes are averaged from stop_times.txt across selected trips.",
-                "Station-pair transfer times average raw transfers.txt child-stop rows after station collapse.",
-                "Route-pair transfer times use raw transfers.txt child-stop route-pair minimums before station collapse.",
-                "Waits use half of derived median scheduled peak headway, with direction, route, then mode fallbacks.",
-                "No pathways.txt, disruptions, live data, or time-of-day routing are used.",
-                "Puzzle pairs are filtered so the fastest route requires at least one line change.",
-                "Puzzle pairs are filtered so the fastest route is at least 1 km.",
-                "Puzzle pairs are filtered so endpoints are at least 1.5 km apart as the crow flies.",
-                "Puzzle endpoints are restricted to metro-served stations plus RER stations within Paris city bounds.",
-            ],
-        },
+        "metadata": network_metadata(wait_by_direction, wait_by_route, {"kind": "network"}),
         "routes": routes,
         "directions": directions,
         "stations": stations,
@@ -1224,13 +1238,310 @@ def main() -> None:
         "stationEquivalents": station_equivalents,
         "transfers": transfers,
         "routeTransfers": route_transfers,
-        "puzzles": pool,
+    }
+    summary = {
+        "selectedRouteCount": len(routes),
+        "directionCount": len(directions),
+        "stationCount": len(stations),
+        "candidateEndpointCount": len(endpoint_ids),
+        "orderedCandidatePairsConsidered": total_ordered_pairs,
+    }
+    return data, router, endpoint_ids, summary
+
+
+def playable_reasons(
+    fastest: tuple[int, list[str]] | None,
+    optimal_route: dict | None,
+    endpoint_distance_m: float | None,
+    route_distance_m: float | None,
+    transit_edge_count: int,
+) -> list[str]:
+    reasons = []
+    if not fastest or not optimal_route:
+        reasons.append("unroutable")
+    if endpoint_distance_m is None or endpoint_distance_m < MIN_PUZZLE_ENDPOINT_DISTANCE_M:
+        reasons.append("endpoint_distance_under_1500m")
+    if route_distance_m is None or route_distance_m < MIN_PUZZLE_ROUTE_DISTANCE_M:
+        reasons.append("route_distance_under_1000m")
+    if transit_edge_count <= 3:
+        reasons.append("fewer_than_4_transit_edges")
+    if not optimal_route or optimal_route.get("transferCount", 0) < 1:
+        reasons.append("no_transfer_required")
+    return reasons
+
+
+def build_candidate_pair(router: Router, stations: dict[str, dict], start: str, end: str) -> dict:
+    endpoint_distance_m = station_distance_m(stations[start], stations[end])
+    fastest = router.fastest_path(start, end)
+    optimal_route = router.describe_path(*fastest) if fastest else None
+    transit_edge_count = optimal_route_edge_count(optimal_route, router.directions) if optimal_route else 0
+    route_distance_m = optimal_route_distance_m(optimal_route, router.directions, stations) if optimal_route else None
+    reasons = playable_reasons(fastest, optimal_route, endpoint_distance_m, route_distance_m, transit_edge_count)
+    return {
+        "id": f"pair:{start}:{end}",
+        "start": start,
+        "end": end,
+        "endpointDistanceM": round(endpoint_distance_m) if endpoint_distance_m is not None else None,
+        "routeDistanceM": round(route_distance_m) if route_distance_m is not None else None,
+        "transitEdgeCount": transit_edge_count,
+        "transferCount": optimal_route.get("transferCount", 0) if optimal_route else 0,
+        "routable": bool(optimal_route),
+        "playable": not reasons,
+        "unplayableReasons": reasons,
+        "optimalRoute": optimal_route or {},
     }
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    size_mb = OUT.stat().st_size / (1024 * 1024)
-    log(f"wrote {OUT} ({size_mb:.2f} MB)")
+
+def build_all_pairs(router: Router, stations: dict[str, dict], endpoint_ids: list[str]) -> tuple[list[dict], Counter]:
+    pairs = []
+    reason_counts: Counter[str] = Counter()
+    considered = 0
+    for start in endpoint_ids:
+        for end in endpoint_ids:
+            if start == end or stations[start]["name"] == stations[end]["name"]:
+                continue
+            considered += 1
+            pair = build_candidate_pair(router, stations, start, end)
+            pairs.append(pair)
+            reason_counts.update(pair["unplayableReasons"])
+            if considered % ALL_PAIRS_PROGRESS_INTERVAL == 0:
+                log(f"computed {considered:,} ordered candidate pairs")
+    return pairs, reason_counts
+
+
+def pair_line_ids(pair: dict) -> set[str]:
+    return {leg["routeId"] for leg in pair.get("optimalRoute", {}).get("legs", []) if leg.get("routeId")}
+
+
+def distance_bucket(pair: dict) -> int:
+    return min(5, int((pair.get("routeDistanceM") or 0) // 2500))
+
+
+def select_varied_playable(pairs: list[dict], count: int, seed: str) -> list[dict]:
+    playable = [pair for pair in pairs if pair.get("playable")]
+    rng = random.Random(seed)
+    shuffled = playable[:]
+    rng.shuffle(shuffled)
+    selected = []
+    used_station_ids: set[str] = set()
+    used_unordered: set[tuple[str, str]] = set()
+
+    def take(require_unused_stations: bool) -> None:
+        for pair in playable:
+            if pair in selected:
+                continue
+            unordered = tuple(sorted([pair["start"], pair["end"]]))
+            if unordered in used_unordered:
+                continue
+            if require_unused_stations and (pair["start"] in used_station_ids or pair["end"] in used_station_ids):
+                continue
+            selected.append(pair)
+            used_station_ids.update([pair["start"], pair["end"]])
+            used_unordered.add(unordered)
+            if len(selected) >= count:
+                return
+
+    playable = shuffled
+    take(require_unused_stations=True)
+    if len(selected) < count:
+        take(require_unused_stations=False)
+
+    if len(selected) < count:
+        raise RuntimeError(f"only selected {len(selected)} playable pairs; need {count}")
+    return selected
+
+
+def select_example_pairs(pairs: list[dict], count: int) -> list[dict]:
+    playable_count = min(count, max(0, count - 10))
+    selected = select_varied_playable(pairs, playable_count, "metro-express-example-v1")
+    selected_ids = {pair["id"] for pair in selected}
+    non_playable = [
+        pair
+        for pair in sorted(pairs, key=lambda item: item["id"])
+        if not pair.get("playable") and pair["id"] not in selected_ids
+    ]
+    selected.extend(non_playable[: max(0, count - len(selected))])
+    selected_ids = {pair["id"] for pair in selected}
+    selected.extend(pair for pair in sorted(pairs, key=lambda item: item["id"]) if pair["id"] not in selected_ids)
+    return selected[:count]
+
+
+def daily_metadata(day: date, count: int) -> dict:
+    return {
+        "title": "MÃ©tro Express",
+        "kind": "daily-puzzles",
+        "date": day.isoformat(),
+        "pairCount": count,
+        **read_feed_metadata(),
+    }
+
+
+def example_metadata(count: int) -> dict:
+    return {
+        "title": "MÃ©tro Express",
+        "kind": "example-dev-puzzles",
+        "pairCount": count,
+        "description": "Committed example/dev dataset for schema checks and local fallback; not the daily puzzle pool.",
+        **read_feed_metadata(),
+    }
+
+
+def all_pairs_metadata(pairs: list[dict], reason_counts: Counter) -> dict:
+    routable_count = sum(1 for pair in pairs if pair.get("routable"))
+    playable_count = sum(1 for pair in pairs if pair.get("playable"))
+    return {
+        "title": "MÃ©tro Express",
+        "kind": "all-candidate-pairs",
+        "ordered": True,
+        "pairCount": len(pairs),
+        "routablePairs": routable_count,
+        "playablePairs": playable_count,
+        "nonPlayablePairs": len(pairs) - playable_count,
+        "unplayableReasonCounts": dict(sorted(reason_counts.items())),
+        **read_feed_metadata(),
+    }
+
+
+def write_network(data: dict) -> None:
+    write_json(NETWORK_OUT, data)
+    log(f"wrote {NETWORK_OUT} ({file_size_mb(NETWORK_OUT):.2f} MB)")
+
+
+def write_all_pairs(pairs: list[dict], reason_counts: Counter) -> None:
+    data = {"metadata": all_pairs_metadata(pairs, reason_counts), "puzzles": pairs}
+    write_json(ALL_PAIRS_OUT, data)
+    log(f"wrote {ALL_PAIRS_OUT} ({file_size_mb(ALL_PAIRS_OUT):.2f} MB)")
+
+
+def write_example(pairs: list[dict], count: int) -> None:
+    selected = select_example_pairs(pairs, count)
+    data = {"metadata": example_metadata(len(selected)), "puzzles": selected}
+    write_json(EXAMPLE_OUT, data)
+    log(f"wrote {EXAMPLE_OUT} ({file_size_mb(EXAMPLE_OUT):.2f} MB)")
+
+
+def write_daily_range(pairs: list[dict], start_date: str, days: int, count: int) -> None:
+    start = date.fromisoformat(start_date)
+    dates = []
+    for offset in range(days):
+        day = start + timedelta(days=offset)
+        dates.append(day.isoformat())
+        selected = select_varied_playable(pairs, count, f"metro-express-daily:{day.isoformat()}")
+        data = {"metadata": daily_metadata(day, len(selected)), "puzzles": selected}
+        write_json(DAILY_DIR / f"{day.isoformat()}.json", data)
+    index = {
+        "metadata": {
+            "title": "MÃ©tro Express",
+            "kind": "daily-puzzle-index",
+            "startDate": dates[0] if dates else None,
+            "endDate": dates[-1] if dates else None,
+            "dayCount": len(dates),
+            **read_feed_metadata(),
+        },
+        "dates": dates,
+    }
+    write_json(DAILY_INDEX_OUT, index)
+    total_bytes = sum(path.stat().st_size for path in DAILY_DIR.glob("*.json"))
+    log(f"wrote {days} daily files and index to {DAILY_DIR} ({total_bytes / (1024 * 1024):.2f} MB total)")
+
+
+def load_all_pairs() -> tuple[list[dict], Counter] | None:
+    if not ALL_PAIRS_OUT.exists():
+        return None
+    data = json.loads(ALL_PAIRS_OUT.read_text(encoding="utf-8"))
+    pairs = data.get("puzzles", [])
+    reason_counts: Counter[str] = Counter()
+    for pair in pairs:
+        reason_counts.update(pair.get("unplayableReasons", []))
+    log(f"loaded {len(pairs):,} candidate pairs from {ALL_PAIRS_OUT}")
+    return pairs, reason_counts
+
+
+def load_network_summary() -> dict[str, int]:
+    if not NETWORK_OUT.exists():
+        return {}
+    data = json.loads(NETWORK_OUT.read_text(encoding="utf-8"))
+    stations = data.get("stations", {})
+    endpoint_count = sum(1 for station in stations.values() if station.get("services") and is_puzzle_endpoint(station))
+    return {
+        "selectedRouteCount": len(data.get("routes", {})),
+        "directionCount": len(data.get("directions", {})),
+        "stationCount": len(stations),
+        "candidateEndpointCount": endpoint_count,
+        "orderedCandidatePairsConsidered": 0,
+    }
+
+
+def summarize(summary: dict[str, int], pairs: list[dict] | None = None, reason_counts: Counter | None = None) -> None:
+    log("summary:")
+    log(f"  selected routes: {summary.get('selectedRouteCount', 0):,}")
+    log(f"  directions: {summary.get('directionCount', 0):,}")
+    log(f"  stations: {summary.get('stationCount', 0):,}")
+    log(f"  candidate endpoints: {summary.get('candidateEndpointCount', 0):,}")
+    ordered_count = summary.get("orderedCandidatePairsConsidered", 0) or (len(pairs) if pairs is not None else 0)
+    log(f"  ordered candidate pairs considered: {ordered_count:,}")
+    if pairs is None:
+        return
+    routable_count = sum(1 for pair in pairs if pair.get("routable"))
+    playable_count = sum(1 for pair in pairs if pair.get("playable"))
+    log(f"  routable pairs: {routable_count:,}")
+    log(f"  playable pairs: {playable_count:,}")
+    log(f"  non-playable pairs: {len(pairs) - playable_count:,}")
+    if reason_counts:
+        log(f"  unplayable reason counts: {dict(sorted(reason_counts.items()))}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build Metro Express static data from local GTFS.")
+    parser.add_argument(
+        "--mode",
+        choices=["network", "all-pairs", "example", "daily-range", "release"],
+        default="release",
+        help="Output mode. release writes network, ignored all-pairs, example, and daily files.",
+    )
+    parser.add_argument("--start-date", default=DEFAULT_START_DATE)
+    parser.add_argument("--days", type=int, default=DEFAULT_DAYS)
+    parser.add_argument("--count", type=int, default=None, help="Pair count for example or daily-range modes.")
+    parser.add_argument("--daily-count", type=int, default=DEFAULT_DAILY_COUNT)
+    parser.add_argument("--example-count", type=int, default=DEFAULT_EXAMPLE_COUNT)
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    if args.mode in {"example", "daily-range"} and NETWORK_OUT.exists():
+        loaded = load_all_pairs()
+        if loaded:
+            pairs, reason_counts = loaded
+            if args.mode == "example":
+                write_example(pairs, args.count or DEFAULT_EXAMPLE_COUNT)
+            else:
+                write_daily_range(pairs, args.start_date, args.days, args.count or DEFAULT_DAILY_COUNT)
+            summarize(load_network_summary(), pairs, reason_counts)
+            return
+
+    network, router, endpoint_ids, summary = build_network()
+    write_network(network)
+
+    pairs: list[dict] | None = None
+    reason_counts: Counter[str] | None = None
+    if args.mode in {"all-pairs", "example", "daily-range", "release"}:
+        loaded = None if args.mode in {"all-pairs", "release"} else load_all_pairs()
+        if loaded:
+            pairs, reason_counts = loaded
+        else:
+            pairs, reason_counts = build_all_pairs(router, network["stations"], endpoint_ids)
+            write_all_pairs(pairs, reason_counts)
+
+    if args.mode == "example":
+        write_example(pairs or [], args.count or DEFAULT_EXAMPLE_COUNT)
+    elif args.mode == "daily-range":
+        write_daily_range(pairs or [], args.start_date, args.days, args.count or DEFAULT_DAILY_COUNT)
+    elif args.mode == "release":
+        write_example(pairs or [], args.example_count)
+        write_daily_range(pairs or [], args.start_date, args.days, args.daily_count)
+
+    summarize(summary, pairs, reason_counts)
 
 
 if __name__ == "__main__":

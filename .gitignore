@@ -1,3 +1,5 @@
 gouv_paris_gtfs-export/
 scripts/__pycache__/
 *.pyc
+public/data/generated/
+public/data/metro-express-data.json
