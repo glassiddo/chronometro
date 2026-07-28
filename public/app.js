@@ -2771,11 +2771,7 @@ function nearestDailyDate(dates, target) {
     })[0];
 }
 
-async function loadPuzzleSet() {
-  const today = parisDateString();
-  const index = await fetchJson(DAILY_INDEX_URL);
-  const dailyDate = nearestDailyDate(index?.dates, today) || today;
-  const dailyData = await fetchJson(`${DAILY_BASE_URL}/${dailyDate}.json`);
+function puzzleSetFromDailyData(dailyData, dailyDate) {
   const dailyPuzzles = playablePuzzles(dailyData);
   if (dailyPuzzles.length) {
     return {
@@ -2784,7 +2780,10 @@ async function loadPuzzleSet() {
       puzzles: dailyPuzzles,
     };
   }
+  return null;
+}
 
+async function loadExamplePuzzleSet(today) {
   const exampleData = await fetchJson(EXAMPLE_URL);
   const examplePuzzles = playablePuzzles(exampleData, FALLBACK_DAILY_COUNT);
   if (examplePuzzles.length) {
@@ -2797,14 +2796,35 @@ async function loadPuzzleSet() {
   throw new Error("Puzzle load failed");
 }
 
+async function loadPuzzleSet(today = parisDateString()) {
+  const todayData = await fetchJson(`${DAILY_BASE_URL}/${today}.json`);
+  const todayPuzzleSet = puzzleSetFromDailyData(todayData, today);
+  if (todayPuzzleSet) return todayPuzzleSet;
+
+  const index = await fetchJson(DAILY_INDEX_URL);
+  const dailyDate = nearestDailyDate(index?.dates, today);
+  if (dailyDate && dailyDate !== today) {
+    const dailyData = await fetchJson(`${DAILY_BASE_URL}/${dailyDate}.json`);
+    const dailyPuzzleSet = puzzleSetFromDailyData(dailyData, dailyDate);
+    if (dailyPuzzleSet) return dailyPuzzleSet;
+  }
+
+  return loadExamplePuzzleSet(today);
+}
+
+function showLoadingState() {
+  $("#game").innerHTML = `<section class="summary"><p class="muted">Loading today's route...</p></section>`;
+}
+
 async function init() {
-  $("#game").innerHTML = "";
+  showLoadingState();
   $("#homeButton").addEventListener("click", () => {
     if (state.data) restartDay();
   });
-  state.data = await fetchJson(NETWORK_URL);
+  const today = parisDateString();
+  const [networkData, puzzleSet] = await Promise.all([fetchJson(NETWORK_URL), loadPuzzleSet(today)]);
+  state.data = networkData;
   if (!state.data) throw new Error("Network load failed");
-  const puzzleSet = await loadPuzzleSet();
   state.daily = puzzleSet.puzzles;
   state.dailyDate = puzzleSet.date;
   state.dailyKind = puzzleSet.kind;
