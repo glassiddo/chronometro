@@ -706,6 +706,7 @@ class Router:
         route_transfers: dict[str, dict[str, dict[str, dict[str, int]]]],
         wait_by_direction: dict[str, int],
         wait_by_route: dict[str, int],
+        canonical_station_ids: dict[str, str] | None = None,
     ) -> None:
         self.stations = stations
         self.routes = routes
@@ -714,10 +715,34 @@ class Router:
         self.route_transfers = route_transfers
         self.wait_by_direction = wait_by_direction
         self.wait_by_route = wait_by_route
+        self.canonical_station_ids = canonical_station_ids or {}
         self.nodes: dict[str, dict] = {}
         self.station_nodes: dict[str, list[str]] = defaultdict(list)
         self.adj: dict[str, list[tuple[str, int]]] = defaultdict(list)
         self._build()
+
+    def canonical_station_id(self, station_id: str) -> str:
+        return self.canonical_station_ids.get(station_id, station_id)
+
+    def equivalent_station_ids(self, station_id: str) -> list[str]:
+        canonical = self.canonical_station_id(station_id)
+        return [
+            candidate_id
+            for candidate_id in self.stations
+            if self.canonical_station_id(candidate_id) == canonical
+        ]
+
+    def is_boardable_node(self, node_id: str) -> bool:
+        node = self.nodes[node_id]
+        direction = self.directions[node["dirId"]]
+        return node["index"] < len(direction["stations"]) - 1
+
+    def boardable_route_ids(self, station_id: str) -> set[str]:
+        return {
+            self.nodes[node_id]["routeId"]
+            for node_id in self.station_nodes.get(station_id, [])
+            if self.is_boardable_node(node_id)
+        }
 
     def fallback_transfer(self, from_mode: str, to_mode: str) -> int:
         if from_mode == to_mode:
@@ -845,11 +870,31 @@ class Router:
         source = "__start__"
         target = "__end__"
         extra_edges: dict[str, list[tuple[str, int]]] = defaultdict(list)
+        start_route_ids = self.boardable_route_ids(start_station)
         for node_id in self.station_nodes.get(start_station, []):
+            if not self.is_boardable_node(node_id):
+                continue
             node = self.nodes[node_id]
             extra_edges[source].append((node_id, self.wait_seconds(node["dirId"], node["routeId"], node["mode"])))
-        for node_id in self.station_nodes.get(end_station, []):
-            extra_edges[node_id].append((target, 0))
+        start_canonical = self.canonical_station_id(start_station)
+        for walk_station, walk_seconds in self.transfers.get(start_station, {}).items():
+            if self.canonical_station_id(walk_station) == start_canonical:
+                continue
+            for node_id in self.station_nodes.get(walk_station, []):
+                if not self.is_boardable_node(node_id):
+                    continue
+                node = self.nodes[node_id]
+                if node["routeId"] in start_route_ids:
+                    continue
+                extra_edges[source].append(
+                    (
+                        node_id,
+                        walk_seconds + self.wait_seconds(node["dirId"], node["routeId"], node["mode"]),
+                    )
+                )
+        for station_id in self.equivalent_station_ids(end_station):
+            for node_id in self.station_nodes.get(station_id, []):
+                extra_edges[node_id].append((target, 0))
 
         return self.dijkstra(source, target, extra_edges)
 
@@ -961,7 +1006,7 @@ class Router:
             totals["waitSec"] += self.wait_seconds(to_node["dirId"], to_node["routeId"], to_route["mode"])
         return totals
 
-    def describe_path(self, cost: int, path: list[str]) -> dict | None:
+    def describe_path(self, cost: int, path: list[str], start_station: str | None = None, end_station: str | None = None) -> dict | None:
         route_nodes = [node for node in path if node in self.nodes]
         if not route_nodes:
             return None
@@ -975,6 +1020,23 @@ class Router:
         )
         pending_transfer = 0
         current_ride = None
+
+        first_station = self.nodes[route_nodes[0]]["stationId"]
+        if start_station is not None and first_station != start_station:
+            initial_walk = self.transfers.get(start_station, {}).get(first_station)
+            if initial_walk is None:
+                return None
+            walk_step = {
+                "type": "walk",
+                "from": start_station,
+                "to": first_station,
+                "rideSec": 0,
+                "waitSec": 0,
+                "transferSec": int(initial_walk),
+                "elapsedSec": int(initial_walk),
+            }
+            steps.append(walk_step)
+            totals["transferSec"] += walk_step["transferSec"]
 
         def flush_ride() -> None:
             nonlocal current_ride
@@ -1056,7 +1118,13 @@ class Router:
         if pending_wait or pending_transfer:
             # A route may end after a transfer edge into the destination station.
             # Keep the graph cost visible without inventing a zero-length ride.
-            if steps:
+            last_ride_station = legs[-1]["to"] if legs else None
+            arrived_at_equivalent_destination = (
+                end_station is not None
+                and last_ride_station is not None
+                and self.canonical_station_id(last_ride_station) == self.canonical_station_id(end_station)
+            )
+            if steps and not arrived_at_equivalent_destination:
                 steps[-1]["transferSec"] += int(pending_transfer + pending_wait)
                 steps[-1]["elapsedSec"] += int(pending_transfer + pending_wait)
                 totals["transferSec"] += int(pending_transfer + pending_wait)
@@ -1214,7 +1282,16 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
     wait_by_direction, wait_by_route = build_waits(directions, routes, direction_pattern_keys, pattern_peak_departures)
     route_transfers = read_route_transfers(stop_to_station, raw_stop_routes, routes, set(stations))
 
-    router = Router(stations, routes, directions, transfers, route_transfers, wait_by_direction, wait_by_route)
+    router = Router(
+        stations,
+        routes,
+        directions,
+        transfers,
+        route_transfers,
+        wait_by_direction,
+        wait_by_route,
+        canonical_station_ids,
+    )
     endpoint_ids = sorted(
         station_id
         for station_id, station in stations.items()
@@ -1255,6 +1332,7 @@ def playable_reasons(
     endpoint_distance_m: float | None,
     route_distance_m: float | None,
     transit_edge_count: int,
+    endpoints_share_public_line: bool,
 ) -> list[str]:
     reasons = []
     if not fastest or not optimal_route:
@@ -1267,16 +1345,50 @@ def playable_reasons(
         reasons.append("fewer_than_4_transit_edges")
     if not optimal_route or optimal_route.get("transferCount", 0) < 1:
         reasons.append("no_transfer_required")
+    if optimal_route and has_repeated_public_line(optimal_route):
+        reasons.append("repeated_line")
+    if endpoints_share_public_line:
+        reasons.append("endpoints_share_line")
     return reasons
+
+
+def has_repeated_public_line(optimal_route: dict) -> bool:
+    seen = set()
+    for leg in optimal_route.get("legs", []):
+        if leg.get("type") != "ride":
+            continue
+        key = (leg.get("mode"), leg.get("line"))
+        if key in seen:
+            return True
+        seen.add(key)
+    return False
+
+
+def station_public_lines(station: dict, routes: dict[str, dict]) -> set[tuple[str, str]]:
+    return {
+        (routes[route_id]["mode"], routes[route_id]["label"])
+        for route_id in station.get("services", {})
+        if route_id in routes
+    }
 
 
 def build_candidate_pair(router: Router, stations: dict[str, dict], start: str, end: str) -> dict:
     endpoint_distance_m = station_distance_m(stations[start], stations[end])
     fastest = router.fastest_path(start, end)
-    optimal_route = router.describe_path(*fastest) if fastest else None
+    optimal_route = router.describe_path(*fastest, start_station=start, end_station=end) if fastest else None
     transit_edge_count = optimal_route_edge_count(optimal_route, router.directions) if optimal_route else 0
     route_distance_m = optimal_route_distance_m(optimal_route, router.directions, stations) if optimal_route else None
-    reasons = playable_reasons(fastest, optimal_route, endpoint_distance_m, route_distance_m, transit_edge_count)
+    endpoints_share_public_line = bool(
+        station_public_lines(stations[start], router.routes) & station_public_lines(stations[end], router.routes)
+    )
+    reasons = playable_reasons(
+        fastest,
+        optimal_route,
+        endpoint_distance_m,
+        route_distance_m,
+        transit_edge_count,
+        endpoints_share_public_line,
+    )
     return {
         "id": f"pair:{start}:{end}",
         "start": start,

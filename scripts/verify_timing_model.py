@@ -9,10 +9,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "public" / "data" / "metro-express-data.json"
+NETWORK = ROOT / "public" / "data" / "metro-express-network.json"
+DAILY_INDEX = ROOT / "public" / "data" / "daily" / "index.json"
+DAILY_DIR = ROOT / "public" / "data" / "daily"
 APP = ROOT / "public" / "app.js"
 BUILD = ROOT / "scripts" / "build_data.py"
-EXPECTED_PUZZLE_COUNT = 5000
+DAILY_PUZZLE_COUNT = 5
 MIN_PUZZLE_ROUTE_DISTANCE_M = 1000
 MIN_PUZZLE_ENDPOINT_DISTANCE_M = 1500
 
@@ -20,6 +22,23 @@ MIN_PUZZLE_ENDPOINT_DISTANCE_M = 1500
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
+
+
+def load_current_daily_bundle() -> dict:
+    network = json.loads(NETWORK.read_text(encoding="utf-8"))
+    daily_index = json.loads(DAILY_INDEX.read_text(encoding="utf-8"))
+    puzzles = []
+    for day in daily_index["dates"]:
+        daily = json.loads((DAILY_DIR / f"{day}.json").read_text(encoding="utf-8"))
+        require(
+            len(daily["puzzles"]) == DAILY_PUZZLE_COUNT,
+            f"{day} expected {DAILY_PUZZLE_COUNT} daily puzzles, got {len(daily['puzzles'])}",
+        )
+        puzzles.extend(daily["puzzles"])
+    data = dict(network)
+    data["puzzles"] = puzzles
+    data["dailyDates"] = daily_index["dates"]
+    return data
 
 
 def route_transfer(data: dict, from_station: str, to_station: str, from_route: str, to_route: str) -> int | None:
@@ -50,6 +69,14 @@ def station_distance_m(left: dict, right: dict) -> float:
     return 2 * radius_m * math.atan2(math.sqrt(hav), math.sqrt(1 - hav))
 
 
+def station_public_lines(data: dict, station_id: str) -> set[tuple[str, str]]:
+    return {
+        (data["routes"][route_id]["mode"], data["routes"][route_id]["label"])
+        for route_id in data["stations"][station_id].get("services", {})
+        if route_id in data["routes"]
+    }
+
+
 def optimal_route_edge_count(data: dict, optimal_route: dict) -> int:
     edge_count = 0
     for leg in optimal_route["legs"]:
@@ -75,9 +102,10 @@ def optimal_route_distance_m(data: dict, optimal_route: dict) -> float:
 
 
 def verify_puzzle_pool_constraints(data: dict) -> None:
+    expected_puzzle_count = len(data["dailyDates"]) * DAILY_PUZZLE_COUNT
     require(
-        len(data["puzzles"]) == EXPECTED_PUZZLE_COUNT,
-        f"expected {EXPECTED_PUZZLE_COUNT} puzzles, got {len(data['puzzles'])}",
+        len(data["puzzles"]) == expected_puzzle_count,
+        f"expected {expected_puzzle_count} puzzles, got {len(data['puzzles'])}",
     )
     for puzzle in data["puzzles"]:
         optimal = puzzle["optimalRoute"]
@@ -86,6 +114,8 @@ def verify_puzzle_pool_constraints(data: dict) -> None:
             endpoint_distance_m >= MIN_PUZZLE_ENDPOINT_DISTANCE_M,
             f"{puzzle['id']} endpoints are only {endpoint_distance_m:.1f}m apart",
         )
+        shared_lines = station_public_lines(data, puzzle["start"]) & station_public_lines(data, puzzle["end"])
+        require(not shared_lines, f"{puzzle['id']} endpoints share public lines: {sorted(shared_lines)}")
         edge_count = optimal_route_edge_count(data, optimal)
         require(edge_count > 3, f"{puzzle['id']} optimal route has only {edge_count} edges")
         distance_m = optimal_route_distance_m(data, optimal)
@@ -100,6 +130,15 @@ def verify_optimal_breakdowns(data: dict) -> None:
         optimal = puzzle["optimalRoute"]
         steps = optimal.get("steps")
         require(steps, f"{puzzle['id']} missing optimalRoute.steps")
+        public_lines = [
+            (step.get("mode"), step.get("line"))
+            for step in optimal.get("legs", [])
+            if step.get("type", "ride") == "ride"
+        ]
+        require(
+            len(public_lines) == len(set(public_lines)),
+            f"{puzzle['id']} repeats a public line in optimal route: {public_lines}",
+        )
         route_total = optimal["rideSec"] + optimal["waitSec"] + optimal["transferSec"]
         require(
             optimal["totalSec"] == route_total,
@@ -121,6 +160,11 @@ def verify_optimal_breakdowns(data: dict) -> None:
             steps[-1]["to"] == puzzle["end"] or same_station(data, steps[-1]["to"], puzzle["end"]),
             f"{puzzle['id']} last step does not end at destination or equivalent station",
         )
+        if steps[-1].get("type") == "walk":
+            require(
+                not same_station(data, steps[-1]["from"], steps[-1]["to"]),
+                f"{puzzle['id']} ends with a walk between equivalent stations",
+            )
         first_ride = next((step for step in steps if step.get("type", "ride") == "ride"), None)
         require(first_ride is not None, f"{puzzle['id']} has no ride step")
         if first_ride["from"] != puzzle["start"]:
@@ -180,7 +224,7 @@ def verify_station_equivalents(data: dict) -> None:
 
 
 def main() -> None:
-    data = json.loads(DATA.read_text(encoding="utf-8"))
+    data = load_current_daily_bundle()
     verify_puzzle_pool_constraints(data)
     verify_optimal_breakdowns(data)
     verify_auteuil_case_if_present(data)
