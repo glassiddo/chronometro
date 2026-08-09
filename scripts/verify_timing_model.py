@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import math
+import importlib.util
 from pathlib import Path
 
 
@@ -80,24 +81,26 @@ def station_public_lines(data: dict, station_id: str) -> set[tuple[str, str]]:
 def optimal_route_edge_count(data: dict, optimal_route: dict) -> int:
     edge_count = 0
     for leg in optimal_route["legs"]:
-        stations = data["directions"][leg["directionId"]]["stations"]
-        from_index = stations.index(leg["from"])
-        to_index = stations.index(leg["to"])
-        edge_count += to_index - from_index
+        for segment in leg.get("segments") or [leg]:
+            stations = data["directions"][segment["directionId"]]["stations"]
+            from_index = stations.index(segment["from"])
+            to_index = stations.index(segment["to"])
+            edge_count += to_index - from_index
     return edge_count
 
 
 def optimal_route_distance_m(data: dict, optimal_route: dict) -> float:
     total = 0.0
     for leg in optimal_route["legs"]:
-        direction_stations = data["directions"][leg["directionId"]]["stations"]
-        from_index = direction_stations.index(leg["from"])
-        to_index = direction_stations.index(leg["to"])
-        for left_id, right_id in zip(
-            direction_stations[from_index:to_index],
-            direction_stations[from_index + 1 : to_index + 1],
-        ):
-            total += station_distance_m(data["stations"][left_id], data["stations"][right_id])
+        for segment in leg.get("segments") or [leg]:
+            direction_stations = data["directions"][segment["directionId"]]["stations"]
+            from_index = direction_stations.index(segment["from"])
+            to_index = direction_stations.index(segment["to"])
+            for left_id, right_id in zip(
+                direction_stations[from_index:to_index],
+                direction_stations[from_index + 1 : to_index + 1],
+            ):
+                total += station_distance_m(data["stations"][left_id], data["stations"][right_id])
     return total
 
 
@@ -223,12 +226,67 @@ def verify_station_equivalents(data: dict) -> None:
     )
 
 
+def verify_route_continuations(data: dict) -> None:
+    continuations = data.get("routeContinuations", [])
+    expected = {
+        "routeId": "8567",
+        "stationId": "PARIS166100",
+        "fromDirectionId": "8567:0",
+        "toDirectionId": "8567:1",
+    }
+    require(expected in continuations, f"missing 7bis route continuation: {expected}")
+
+    segment_route = {
+        "legs": [
+            {
+                "routeId": "8567",
+                "line": "7bis",
+                "mode": "metro",
+                "directionId": "8567:0",
+                "from": "PARIS9701",
+                "to": "PARIS166033",
+                "segments": [
+                    {"directionId": "8567:0", "from": "PARIS9701", "to": "PARIS166100"},
+                    {"directionId": "8567:1", "from": "PARIS166100", "to": "PARIS166033"},
+                ],
+            }
+        ]
+    }
+    require(optimal_route_edge_count(data, segment_route) == 2, "7bis loop continuation should count two ride edges")
+
+    spec = importlib.util.spec_from_file_location("build_data", BUILD)
+    build_data = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(build_data)
+    router = build_data.Router(
+        data["stations"],
+        data["routes"],
+        data["directions"],
+        data["transfers"],
+        data["routeTransfers"],
+        data["metadata"].get("waitSecondsByDirection", {}),
+        data["metadata"].get("waitSecondsByRoute", {}),
+        data.get("canonicalStationIds", {}),
+    )
+    fastest = router.fastest_path("PARIS9701", "PARIS166033")
+    route = router.describe_path(*fastest, start_station="PARIS9701", end_station="PARIS166033") if fastest else None
+    require(route is not None, "Place des Fêtes -> Danube should be routable")
+    require(len(route["legs"]) == 1, f"Place des Fêtes -> Danube should be one 7bis ride, got {route['legs']}")
+    leg = route["legs"][0]
+    require(leg["line"] == "7bis", f"Place des Fêtes -> Danube should use 7bis, got {leg['line']}")
+    require(leg["from"] == "PARIS9701" and leg["to"] == "PARIS166033", "7bis continuation endpoints changed")
+    require(leg["rideSec"] == 165, f"7bis continuation ride should be 165s, got {leg['rideSec']}")
+    require(leg["transferSec"] == 0, f"7bis continuation must not charge transfer, got {leg['transferSec']}")
+    require(route["transferSec"] == 0, f"Place des Fêtes -> Danube total transfer should be 0, got {route['transferSec']}")
+
+
 def main() -> None:
     data = load_current_daily_bundle()
     verify_puzzle_pool_constraints(data)
     verify_optimal_breakdowns(data)
     verify_auteuil_case_if_present(data)
     verify_station_equivalents(data)
+    verify_route_continuations(data)
 
     chatelet = route_transfer(data, "PARIS208683", "PARIS208683", "8562", "15061")
     daumesnil = route_transfer(data, "ITOAUTO79148", "ITOAUTO79148", "15093", "15215")

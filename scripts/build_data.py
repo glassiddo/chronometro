@@ -76,6 +76,10 @@ TRANSFER_DEFAULTS = {
     "fallback": 300,
 }
 
+ROUTE_CONTINUATION_STATIONS = {
+    ("8567", "PARIS166100"),  # 7bis through-runs around the Pré-Saint-Gervais loop.
+}
+
 STATION_EQUIVALENCE_DISTANCE_M = 150
 STATION_EQUIVALENCE_TRANSFER_SECONDS = 120
 
@@ -789,6 +793,20 @@ class Router:
     def _add_edge(self, left: str, right: str, weight: int) -> None:
         self.adj[left].append((right, weight))
 
+    def is_route_continuation(self, from_node_id: str, to_node_id: str) -> bool:
+        from_node = self.nodes[from_node_id]
+        to_node = self.nodes[to_node_id]
+        if from_node["dirId"] == to_node["dirId"] or from_node["routeId"] != to_node["routeId"]:
+            return False
+        if from_node["stationId"] != to_node["stationId"]:
+            return False
+        from_direction = self.directions[from_node["dirId"]]
+        return (
+            (from_node["routeId"], from_node["stationId"]) in ROUTE_CONTINUATION_STATIONS
+            and from_node["index"] == len(from_direction["stations"]) - 1
+            and to_node["index"] == 0
+        )
+
     def _build(self) -> None:
         for direction in self.directions.values():
             route = self.routes[direction["routeId"]]
@@ -815,6 +833,9 @@ class Router:
                 for to_node in self.station_nodes.get(to_station, []):
                     target = self.nodes[to_node]
                     if target["dirId"] == node["dirId"]:
+                        continue
+                    if self.is_route_continuation(from_node, to_node):
+                        self._add_edge(from_node, to_node, 0)
                         continue
                     walk = self.transfer_walk(
                         from_station,
@@ -1055,37 +1076,68 @@ class Router:
             totals["transferSec"] += current_ride["transferSec"]
             current_ride = None
 
+        def start_ride(from_node: dict) -> None:
+            nonlocal current_ride
+            direction = self.directions[from_node["dirId"]]
+            route = self.routes[direction["routeId"]]
+            current_ride = {
+                "type": "ride",
+                "routeId": route["id"],
+                "line": route["label"],
+                "mode": route["mode"],
+                "color": route["color"],
+                "textColor": route["textColor"],
+                "directionId": direction["id"],
+                "direction": direction["label"],
+                "from": from_node["stationId"],
+                "to": from_node["stationId"],
+                "rideSec": 0,
+                "waitSec": pending_wait,
+                "transferSec": pending_transfer,
+                "segments": [
+                    {
+                        "directionId": direction["id"],
+                        "from": from_node["stationId"],
+                        "to": from_node["stationId"],
+                    }
+                ],
+            }
+
+        def add_ride_runtime(from_node: dict, to_node: dict) -> None:
+            if current_ride is None:
+                return
+            hidden_ride = self.runtime_between(
+                from_node["dirId"],
+                from_node["stationId"],
+                to_node["stationId"],
+            )
+            current_ride["rideSec"] += hidden_ride if hidden_ride is not None else 0
+            current_ride["to"] = to_node["stationId"]
+            current_ride["segments"][-1]["to"] = to_node["stationId"]
+
         for route_node_index in range(1, len(route_nodes)):
             from_node = self.nodes[route_nodes[route_node_index - 1]]
             to_node = self.nodes[route_nodes[route_node_index]]
             if from_node["dirId"] == to_node["dirId"]:
                 if current_ride is None:
-                    direction = self.directions[from_node["dirId"]]
-                    route = self.routes[direction["routeId"]]
-                    current_ride = {
-                        "type": "ride",
-                        "routeId": route["id"],
-                        "line": route["label"],
-                        "mode": route["mode"],
-                        "color": route["color"],
-                        "textColor": route["textColor"],
-                        "directionId": direction["id"],
-                        "direction": direction["label"],
-                        "from": from_node["stationId"],
-                        "to": from_node["stationId"],
-                        "rideSec": 0,
-                        "waitSec": pending_wait,
-                        "transferSec": pending_transfer,
-                    }
+                    start_ride(from_node)
                     pending_wait = 0
                     pending_transfer = 0
-                hidden_ride = self.runtime_between(
-                    from_node["dirId"],
-                    from_node["stationId"],
-                    to_node["stationId"],
+                add_ride_runtime(from_node, to_node)
+                continue
+
+            if self.is_route_continuation(route_nodes[route_node_index - 1], route_nodes[route_node_index]):
+                if current_ride is None:
+                    start_ride(from_node)
+                    pending_wait = 0
+                    pending_transfer = 0
+                current_ride["segments"].append(
+                    {
+                        "directionId": to_node["dirId"],
+                        "from": to_node["stationId"],
+                        "to": to_node["stationId"],
+                    }
                 )
-                current_ride["rideSec"] += hidden_ride if hidden_ride is not None else 0
-                current_ride["to"] = to_node["stationId"]
                 continue
 
             flush_ride()
@@ -1171,6 +1223,32 @@ def build_station_services(stations: dict[str, dict], routes: dict[str, dict], d
         station["modes"] = sorted({routes[route_id]["mode"] for route_id in station["services"]})
 
 
+def build_route_continuations(directions: dict[str, dict]) -> list[dict]:
+    continuations = []
+    for route_id, station_id in sorted(ROUTE_CONTINUATION_STATIONS):
+        from_directions = [
+            direction
+            for direction in directions.values()
+            if direction["routeId"] == route_id and direction["stations"][-1] == station_id
+        ]
+        to_directions = [
+            direction
+            for direction in directions.values()
+            if direction["routeId"] == route_id and direction["stations"][0] == station_id
+        ]
+        for from_direction in from_directions:
+            for to_direction in to_directions:
+                continuations.append(
+                    {
+                        "routeId": route_id,
+                        "stationId": station_id,
+                        "fromDirectionId": from_direction["id"],
+                        "toDirectionId": to_direction["id"],
+                    }
+                )
+    return continuations
+
+
 def is_central_rer_station(station: dict) -> bool:
     lat = station.get("lat")
     lon = station.get("lon")
@@ -1190,27 +1268,29 @@ def is_puzzle_endpoint(station: dict) -> bool:
 def optimal_route_edge_count(optimal_route: dict, directions: dict[str, dict]) -> int:
     edge_count = 0
     for leg in optimal_route["legs"]:
-        stations = directions[leg["directionId"]]["stations"]
-        from_index = stations.index(leg["from"])
-        to_index = stations.index(leg["to"])
-        edge_count += to_index - from_index
+        for segment in leg.get("segments") or [leg]:
+            stations = directions[segment["directionId"]]["stations"]
+            from_index = stations.index(segment["from"])
+            to_index = stations.index(segment["to"])
+            edge_count += to_index - from_index
     return edge_count
 
 
 def optimal_route_distance_m(optimal_route: dict, directions: dict[str, dict], stations: dict[str, dict]) -> float | None:
     total = 0.0
     for leg in optimal_route["legs"]:
-        direction_stations = directions[leg["directionId"]]["stations"]
-        from_index = direction_stations.index(leg["from"])
-        to_index = direction_stations.index(leg["to"])
-        for left_id, right_id in zip(
-            direction_stations[from_index:to_index],
-            direction_stations[from_index + 1 : to_index + 1],
-        ):
-            distance = station_distance_m(stations[left_id], stations[right_id])
-            if distance is None:
-                return None
-            total += distance
+        for segment in leg.get("segments") or [leg]:
+            direction_stations = directions[segment["directionId"]]["stations"]
+            from_index = direction_stations.index(segment["from"])
+            to_index = direction_stations.index(segment["to"])
+            for left_id, right_id in zip(
+                direction_stations[from_index:to_index],
+                direction_stations[from_index + 1 : to_index + 1],
+            ):
+                distance = station_distance_m(stations[left_id], stations[right_id])
+                if distance is None:
+                    return None
+                total += distance
     return total
 
 
@@ -1310,6 +1390,7 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
         "metadata": network_metadata(wait_by_direction, wait_by_route, {"kind": "network"}),
         "routes": routes,
         "directions": directions,
+        "routeContinuations": build_route_continuations(directions),
         "stations": stations,
         "canonicalStationIds": canonical_station_ids,
         "stationEquivalents": station_equivalents,

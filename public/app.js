@@ -2104,6 +2104,10 @@ function transferSeconds(fromStation, toStation, fromRouteId, toRouteId, fromMod
   return null;
 }
 
+function routeContinuation(fromDirectionId) {
+  return (state.data.routeContinuations || []).find((item) => item.fromDirectionId === fromDirectionId) || null;
+}
+
 function lastRideStep() {
   for (let index = state.steps.length - 1; index >= 0; index -= 1) {
     if (stepType(state.steps[index]) === "ride") return state.steps[index];
@@ -2353,6 +2357,11 @@ function renderAlightStep() {
   const dir = direction(selected.directionId);
   const boardIndex = dir.stations.indexOf(selected.boardStation);
   const choices = dir.stations.slice(boardIndex + 1);
+  const continuation = routeContinuation(selected.directionId);
+  if (continuation && dir.stations[dir.stations.length - 1] === continuation.stationId) {
+    const nextDir = direction(continuation.toDirectionId);
+    choices.push(...nextDir.stations.slice(1));
+  }
   const r = route(selected.routeId);
   const stopSignals = (stationId) => {
     const runSec = runtimeBetween(selected.directionId, selected.boardStation, stationId);
@@ -2406,8 +2415,34 @@ function runtimeBetween(dirId, fromStation, toStation) {
   const dir = direction(dirId);
   const fromIndex = dir.stations.indexOf(fromStation);
   const toIndex = dir.stations.indexOf(toStation);
-  if (fromIndex < 0 || toIndex <= fromIndex) return null;
-  return dir.runtimes.slice(fromIndex, toIndex).reduce((sum, sec) => sum + sec, 0);
+  if (fromIndex < 0) return null;
+  if (toIndex > fromIndex) return dir.runtimes.slice(fromIndex, toIndex).reduce((sum, sec) => sum + sec, 0);
+
+  const continuation = routeContinuation(dirId);
+  if (!continuation || dir.stations[dir.stations.length - 1] !== continuation.stationId) return null;
+  const nextDir = direction(continuation.toDirectionId);
+  const nextToIndex = nextDir.stations.indexOf(toStation);
+  if (nextToIndex <= 0) return null;
+  const firstPart = dir.runtimes.slice(fromIndex).reduce((sum, sec) => sum + sec, 0);
+  const secondPart = nextDir.runtimes.slice(0, nextToIndex).reduce((sum, sec) => sum + sec, 0);
+  return firstPart + secondPart;
+}
+
+function rideSegmentsBetween(dirId, fromStation, toStation) {
+  const dir = direction(dirId);
+  const fromIndex = dir.stations.indexOf(fromStation);
+  const toIndex = dir.stations.indexOf(toStation);
+  if (fromIndex >= 0 && toIndex > fromIndex) return [{ directionId: dirId, from: fromStation, to: toStation }];
+
+  const continuation = routeContinuation(dirId);
+  if (!continuation || fromIndex < 0 || dir.stations[dir.stations.length - 1] !== continuation.stationId) return [];
+  const nextDir = direction(continuation.toDirectionId);
+  const nextToIndex = nextDir.stations.indexOf(toStation);
+  if (nextToIndex <= 0) return [];
+  return [
+    { directionId: dirId, from: fromStation, to: continuation.stationId },
+    { directionId: continuation.toDirectionId, from: continuation.stationId, to: toStation },
+  ];
 }
 
 function legTiming(selected, toStation, rideSec) {
@@ -2490,6 +2525,7 @@ function addLeg(toStation) {
     directionId: selected.directionId,
     from: selected.boardStation,
     to: toStation,
+    segments: rideSegmentsBetween(selected.directionId, selected.boardStation, toStation),
     ...timing,
   };
   state.steps.push(leg);
