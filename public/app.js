@@ -3,6 +3,7 @@ const DAILY_INDEX_URL = "./data/daily/index.json";
 const DAILY_BASE_URL = "./data/daily";
 const EXAMPLE_URL = "./data/example/metro-express-example-data.json";
 const FALLBACK_DAILY_COUNT = 5;
+const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
 
 const state = {
   data: null,
@@ -2132,12 +2133,24 @@ function explicitWalkSeconds(fromStation, toStation, nextRouteId = null) {
     if (Number.isFinite(routeSpecific)) return routeSpecific;
   }
   const explicit = state.data.transfers[fromStation]?.[toStation];
-  return Number.isFinite(explicit) ? explicit : null;
+  if (Number.isFinite(explicit)) return explicit;
+  const equivalent = equivalentWalkSeconds(fromStation, toStation);
+  return Number.isFinite(equivalent) ? equivalent : null;
+}
+
+function equivalentWalkSeconds(fromStation, toStation) {
+  if (fromStation === toStation) return 0;
+  if (canonicalStationId(fromStation) !== canonicalStationId(toStation)) return null;
+  const direct = state.data.transfers[fromStation]?.[toStation];
+  if (Number.isFinite(direct)) return direct;
+  const reverse = state.data.transfers[toStation]?.[fromStation];
+  if (Number.isFinite(reverse)) return reverse;
+  return STATION_EQUIVALENCE_TRANSFER_SECONDS;
 }
 
 function walkOptions() {
   const currentCanonical = canonicalStationId(state.currentStation);
-  const currentRouteIds = new Set(boardableRouteIds(state.currentStation));
+  const currentRouteIds = new Set(boardingOptions().map((option) => option.routeId));
   const byCanonical = new Map();
   Object.entries(state.data.transfers[state.currentStation] || {}).forEach(([stationId, walkSec]) => {
     if (!Number.isFinite(walkSec)) return;
@@ -2159,16 +2172,19 @@ function walkOptions() {
   );
 }
 
+function boardableDirectionIds(stationId, routeId) {
+  const directionIds = station(stationId).services?.[routeId] || [];
+  return directionIds.filter((dirId) => {
+    const dir = direction(dirId);
+    const index = dir.stations.indexOf(stationId);
+    return index >= 0 && index < dir.stations.length - 1;
+  });
+}
+
 function boardableRouteIds(stationId) {
   const services = station(stationId).services || {};
   return Object.entries(services)
-    .filter(([, directionIds]) =>
-      directionIds.some((dirId) => {
-        const dir = direction(dirId);
-        const index = dir.stations.indexOf(stationId);
-        return index >= 0 && index < dir.stations.length - 1;
-      }),
-    )
+    .filter(([routeId]) => boardableDirectionIds(stationId, routeId).length)
     .map(([routeId]) => routeId)
     .filter((routeId) => route(routeId))
     .sort((a, b) => {
@@ -2184,25 +2200,39 @@ function walkLineBadges(stationId) {
   return badges ? `<span class="walk-lines" aria-label="Lines at ${escapeHtml(station(stationId).name)}">${badges}</span>` : "";
 }
 
+function equivalentBoardingLocations(stationId) {
+  const currentCanonical = canonicalStationId(stationId);
+  const locations = [{ stationId, walkSec: 0 }];
+  Object.keys(state.data.stations || {}).forEach((transferStationId) => {
+    const walkSec = equivalentWalkSeconds(stationId, transferStationId);
+    if (!Number.isFinite(walkSec) || walkSec < 0) return;
+    if (transferStationId === stationId) return;
+    if (canonicalStationId(transferStationId) !== currentCanonical) return;
+    locations.push({ stationId: transferStationId, walkSec });
+  });
+  return locations.sort(
+    (a, b) => a.walkSec - b.walkSec || compareText(station(a.stationId).name, station(b.stationId).name),
+  );
+}
+
 function boardingOptions() {
   const byRoute = new Map();
   const seen = new Set();
-  const services = station(state.currentStation).services || {};
-  Object.entries(services).forEach(([routeId, directionIds]) => {
-    const usable = directionIds.filter((dirId) => {
-      const dir = direction(dirId);
-      const index = dir.stations.indexOf(state.currentStation);
-      return index >= 0 && index < dir.stations.length - 1;
-    });
-    if (!usable.length) return;
-    const key = `${state.currentStation}:${routeId}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    if (!byRoute.has(routeId)) byRoute.set(routeId, { routeId, boards: [] });
-    byRoute.get(routeId).boards.push({
-      boardStation: state.currentStation,
-      walkSec: 0,
-      directionIds: usable,
+  equivalentBoardingLocations(state.currentStation).forEach((location) => {
+    const services = station(location.stationId).services || {};
+    Object.keys(services).forEach((routeId) => {
+      if (!route(routeId)) return;
+      const usable = boardableDirectionIds(location.stationId, routeId);
+      if (!usable.length) return;
+      const key = `${location.stationId}:${routeId}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      if (!byRoute.has(routeId)) byRoute.set(routeId, { routeId, boards: [] });
+      byRoute.get(routeId).boards.push({
+        boardStation: location.stationId,
+        walkSec: location.walkSec,
+        directionIds: usable,
+      });
     });
   });
 
@@ -2236,7 +2266,8 @@ function renderLineStep(message = "") {
         ${options
           .map((option, index) => {
             const r = route(option.routeId);
-            const transferLabel = state.steps.length ? "Transfer here" : "Board here";
+            const hasNearbyBoard = option.boards.some((board) => board.boardStation !== state.currentStation);
+            const transferLabel = hasNearbyBoard ? "Board here or nearby" : state.steps.length ? "Transfer here" : "Board here";
             return `
               <button class="choice line-choice" data-line-index="${index}">
                 ${lineBadge(option.routeId)}
