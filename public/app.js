@@ -2587,8 +2587,6 @@ function scoreRoute(puzzle, signature, totalSec) {
   if (exact) return { score: 100, label: "Perfect" };
 
   const deltaSec = Math.max(0, totalSec - optimal.totalSec);
-  if (deltaSec <= 30) return { score: 100, label: "Equally fast route" };
-
   const deltaMin = deltaSec / 60;
   const slowPct = (deltaSec / optimal.totalSec) * 100;
   const rawScore = 100 - deltaMin * 3 - slowPct * 0.6;
