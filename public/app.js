@@ -2734,7 +2734,7 @@ function shareScores() {
 }
 
 function shareText(total) {
-  return `Métro Express ${state.dailyDate || parisDateString()}\n${total}/${puzzleCount() * 100}\nScores: ${shareScores()}`;
+  return `chronometro.cc ${state.dailyDate || parisDateString()}\n${total}/${puzzleCount() * 100}\nScores: ${shareScores()}`;
 }
 
 async function copyText(text) {
