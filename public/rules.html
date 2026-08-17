@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="How to play Chronométro and how scores are calculated." />
+    <title>Rules | Chronométro</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div class="shell info-shell">
+      <header class="masthead info-masthead"><div><p class="kicker">Paris daily route puzzle</p><a class="brand-link" href="./index.html">Chronométro</a></div></header>
+      <main class="info-main" id="main-content">
+        <p class="back-row"><a href="./index.html">← Back to game</a></p>
+        <header><p class="kicker">How to play</p><h1>Rules</h1><p class="lede">Build the quickest route from the departure station to the arrival station. Each day has five puzzles, worth up to 100 points each.</p></header>
+
+        <section class="info-card"><h2>Build your route</h2><ol><li>Choose a line from the departure station.</li><li>Pick a direction and the stop where you want to get off.</li><li>Change lines or use a walking connection when one is available.</li><li>Keep going until you reach the arrival station.</li></ol><p>You can reset an unfinished route. If you give up, the game shows the fastest route and gives you 0 points for that puzzle.</p></section>
+
+        <section class="info-card"><h2>How time works</h2><p>Your total includes time on the train, estimated waits, and the time needed to change stations or lines. These numbers come from the game's fixed timetable data and timing model. They are not live travel estimates.</p></section>
+
+        <section class="info-card"><h2>Scoring</h2><p>You get 100 points when your route exactly matches the stored fastest route. Otherwise, the score drops based on the extra time in minutes and as a percentage of the fastest time.</p><p class="formula">Score = 100 − 3 × minutes slower − 0.6 × percentage slower</p><p>The 3 and 0.6 are just balancing choices. If you reach the destination, you score between 10 and 99 unless your route is an exact match. Giving up scores 0. After five puzzles, the game adds everything together for a score out of 500.</p></section>
+      </main>
+      <footer class="site-footer"><nav aria-label="Project information"><a href="./faq.html">FAQ</a><a aria-current="page" href="./rules.html">Rules</a><a href="./legal.html">About</a></nav><p>Chronométro is not affiliated with or endorsed by RATP or Île-de-France Mobilités.</p></footer>
+    </div>
+  </body>
+</html>

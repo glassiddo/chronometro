@@ -3,18 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chronometro</title>
+    <title>Chronométro</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <a class="skip-link" href="#game">Skip to game</a>
     <main class="shell">
       <header class="masthead">
         <div>
           <p class="kicker">Paris daily route puzzle</p>
-          <button class="home-title" id="homeButton" type="button" aria-label="Restart Chronometro">
-            Chronometro
+          <button class="home-title" id="homeButton" type="button" aria-label="Restart Chronométro">
+            Chronométro
           </button>
-          <p class="objective">Build the fastest route from departure to arrival.</p>
+          <p class="objective">Build the fastest route from one station to another.</p>
         </div>
         <div class="date-lockup">
           <span id="todayLabel"></span>
@@ -23,6 +24,15 @@
       </header>
 
       <section id="game" class="game" aria-live="polite"></section>
+
+      <footer class="site-footer">
+        <nav aria-label="Project information">
+          <a href="./faq.html">FAQ</a>
+          <a href="./rules.html">Rules</a>
+          <a href="./legal.html">About</a>
+        </nav>
+        <p>Chronométro is not affiliated with or endorsed by RATP or Île-de-France Mobilités.</p>
+      </footer>
     </main>
 
     <script src="./app.js"></script>
