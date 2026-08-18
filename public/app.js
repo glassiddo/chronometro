@@ -18,7 +18,6 @@ const state = {
   selected: {},
   results: [],
   hintText: "",
-  showConnectingLines: true,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -1979,33 +1978,28 @@ function orientationMapMarkup() {
       ? mapMarker(state.currentStation, "Current", "current-marker")
       : "";
   return `
-    <details class="map-toggle" open>
-      <summary>Map</summary>
-      <figure class="orientation-map" aria-label="Paris orientation map showing start and destination stations">
-        <svg viewBox="0 0 ${PARIS_MAP.width} ${PARIS_MAP.height}" role="img" aria-labelledby="orientationMapTitle orientationMapDesc">
-          <title id="orientationMapTitle">Paris orientation map</title>
-          <desc id="orientationMapDesc">A simplified map of Paris with the Seine, the start station, and the destination station.</desc>
-          <rect class="map-bg" width="${PARIS_MAP.width}" height="${PARIS_MAP.height}" rx="6"></rect>
-          ${PARIS_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
-          <path class="paris-outline" d="${mapCurvePath(PARIS_MAP.outline, true)}"></path>
-          <path class="seine" d="${mapCurvePath(PARIS_MAP.seine)}"></path>
-          ${mapMarker(puzzle.start, "Start", "start-marker")}
-          ${mapMarker(puzzle.end, "End", "end-marker")}
-          ${current}
-        </svg>
-      </figure>
-    </details>
+    <figure class="orientation-map" aria-label="Paris orientation map showing start and destination stations">
+      <svg viewBox="0 0 ${PARIS_MAP.width} ${PARIS_MAP.height}" role="img" aria-labelledby="orientationMapTitle orientationMapDesc">
+        <title id="orientationMapTitle">Paris orientation map</title>
+        <desc id="orientationMapDesc">A simplified map of Paris with the Seine, the start station, and the destination station.</desc>
+        <rect class="map-bg" width="${PARIS_MAP.width}" height="${PARIS_MAP.height}" rx="6"></rect>
+        ${PARIS_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
+        <path class="paris-outline" d="${mapCurvePath(PARIS_MAP.outline, true)}"></path>
+        <path class="seine" d="${mapCurvePath(PARIS_MAP.seine)}"></path>
+        ${mapMarker(puzzle.start, "Start", "start-marker")}
+        ${mapMarker(puzzle.end, "End", "end-marker")}
+        ${current}
+      </svg>
+    </figure>
   `;
 }
 
 function toolbarMarkup({ backId = "", backLabel = "" } = {}) {
   const destinationLinesLabel = state.hintText ? "Hide destination's lines" : "Show destination's lines";
-  const connectingLinesLabel = state.showConnectingLines ? "Hide connecting lines" : "Show connecting lines";
   return `
     <div class="toolbar">
       ${backId ? `<button class="action secondary" id="${backId}">${escapeHtml(backLabel)}</button>` : ""}
       <button class="action secondary" id="hintButton">${destinationLinesLabel}</button>
-      <button class="action secondary" id="connectingLinesButton" type="button" aria-pressed="${state.showConnectingLines}">${connectingLinesLabel}</button>
       <button class="action secondary" id="resetRoute">Reset route</button>
       <button class="action secondary" id="giveUp">Give up</button>
     </div>
@@ -2027,20 +2021,11 @@ function bindPuzzleToolbar() {
       else renderLineStep();
     });
   }
-  const connectingLinesButton = $("#connectingLinesButton");
-  if (connectingLinesButton) {
-    connectingLinesButton.addEventListener("click", () => {
-      state.showConnectingLines = !state.showConnectingLines;
-      if (state.stage === "direction") renderDirectionStep();
-      else if (state.stage === "alight") renderAlightStep();
-      else renderLineStep();
-    });
-  }
   $("#resetRoute").addEventListener("click", startPuzzle);
   $("#giveUp").addEventListener("click", giveUp);
 }
 
-function boardShell(content) {
+function boardShell(content, { showRouteSummary = true } = {}) {
   const puzzle = currentPuzzle();
   $("#game").innerHTML = `
     <div class="board">
@@ -2050,34 +2035,18 @@ function boardShell(content) {
           <div class="station"><span>Arrivée</span><strong>${escapeHtml(station(puzzle.end).name)}</strong></div>
         </div>
         ${orientationMapMarkup()}
-        <details class="route-summary" ${state.steps.length ? "open" : ""}>
-          <summary>Your route</summary>
-          <div class="route-list">${renderRouteList(state.steps, { showDirection: false, showDetail: false })}</div>
-        </details>
+        ${
+          showRouteSummary
+            ? `<section class="route-summary" aria-labelledby="routeSummaryTitle">
+                <h3 id="routeSummaryTitle">Your route</h3>
+                <div class="route-list">${renderRouteList(state.steps, { showDirection: false, showDetail: false })}</div>
+              </section>`
+            : ""
+        }
       </aside>
       <section class="workspace">${content}</section>
     </div>
   `;
-  bindResponsivePanels();
-}
-
-function bindResponsivePanels() {
-  const isMobile = () => window.matchMedia("(max-width: 820px)").matches;
-  document.querySelectorAll(".map-toggle, .route-summary").forEach((panel) => {
-    const summary = panel.querySelector("summary");
-    const keepDesktopOpen = (event) => {
-      if (isMobile()) return;
-      event.preventDefault();
-      panel.open = true;
-    };
-    if (!isMobile()) {
-      panel.open = true;
-    }
-    summary.addEventListener("click", keepDesktopOpen);
-    summary.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") keepDesktopOpen(event);
-    });
-  });
 }
 
 function transferFallback(fromMode, toMode) {
@@ -2195,7 +2164,6 @@ function boardableRouteIds(stationId) {
 }
 
 function walkLineBadges(stationId) {
-  if (!state.showConnectingLines) return "";
   const badges = boardableRouteIds(stationId).map(lineBadge).join("");
   return badges ? `<span class="walk-lines" aria-label="Lines at ${escapeHtml(station(stationId).name)}">${badges}</span>` : "";
 }
@@ -2261,45 +2229,47 @@ function renderLineStep(message = "") {
     ${
       options.length
         ? `<section class="choice-section">
-      <h3>Board here</h3>
-      <div class="choice-grid">
-        ${options
-          .map((option, index) => {
-            const r = route(option.routeId);
-            const hasNearbyBoard = option.boards.some((board) => board.boardStation !== state.currentStation);
-            const transferLabel = hasNearbyBoard ? "Board here or nearby" : state.steps.length ? "Transfer here" : "Board here";
-            return `
-              <button class="choice line-choice" data-line-index="${index}">
-                ${lineBadge(option.routeId)}
-                <span><strong>${escapeHtml(modeName(r.mode))} ${escapeHtml(r.label)}</strong> <small>${transferLabel}</small></span>
-              </button>
-            `;
-          })
-          .join("")}
-      </div>
-    </section>`
+            <h3>Board here</h3>
+            <div class="choice-grid">
+              ${options
+                .map((option, index) => {
+                  const r = route(option.routeId);
+                  const hasNearbyBoard = option.boards.some((board) => board.boardStation !== state.currentStation);
+                  const transferLabel = hasNearbyBoard ? "Board here or nearby" : state.steps.length ? "Transfer here" : "Board here";
+                  return `
+                    <button class="choice line-choice" data-line-index="${index}">
+                      ${lineBadge(option.routeId)}
+                      <span><strong>${escapeHtml(modeName(r.mode))} ${escapeHtml(r.label)}</strong> <small>${transferLabel}</small></span>
+                    </button>
+                  `;
+                })
+                .join("")}
+            </div>
+          </section>`
         : ""
     }
     ${
       walks.length
-        ? `<section class="choice-section">
-      <h3>Walk first</h3>
-      <div class="choice-grid">
-        ${walks
-          .map(
-            (option, index) => `
-              <button class="choice walk-choice" data-walk-index="${index}">
-                <span>
-                  <strong>Walk to ${escapeHtml(station(option.stationId).name)}</strong>
-                  <small>${formatCompactTime(option.walkSec)} transfer</small>
-                </span>
-                ${walkLineBadges(option.stationId)}
-              </button>
-            `,
-          )
-          .join("")}
-      </div>
-    </section>`
+        ? `<section class="choice-section walk-section">
+            <h3>Walk first</h3>
+            <div class="choice-grid">
+              ${walks
+                .map(
+                  (option, index) => `
+                    <button class="choice walk-choice" data-walk-index="${index}">
+                      <span class="walk-copy">
+                        <strong>Walk to ${escapeHtml(station(option.stationId).name)}</strong>
+                        <span class="walk-meta">
+                          <small>${formatCompactTime(option.walkSec)} transfer</small>
+                          ${walkLineBadges(option.stationId)}
+                        </span>
+                      </span>
+                    </button>
+                  `,
+                )
+                .join("")}
+            </div>
+          </section>`
         : ""
     }
     ${message ? `<p class="notice">${escapeHtml(message)}</p>` : ""}
@@ -2397,13 +2367,11 @@ function renderAlightStep() {
   const stopSignals = (stationId) => {
     const runSec = runtimeBetween(selected.directionId, selected.boardStation, stationId);
     const services = station(stationId).services || {};
-    const transferBadges = state.showConnectingLines
-      ? Object.keys(services)
-          .filter((routeId) => routeId !== selected.routeId && route(routeId))
-          .sort((a, b) => compareText(route(a).label, route(b).label))
-          .map(lineBadge)
-          .join("")
-      : "";
+    const transferBadges = Object.keys(services)
+      .filter((routeId) => routeId !== selected.routeId && route(routeId))
+      .sort((a, b) => compareText(route(a).label, route(b).label))
+      .map(lineBadge)
+      .join("");
     return `
       <span class="stop-meta">
         ${transferBadges ? `<span class="transfer-lines" aria-label="Transfer lines">${transferBadges}</span>` : ""}
@@ -2412,6 +2380,7 @@ function renderAlightStep() {
     `;
   };
   boardShell(`
+    <div class="stop-selection">
     <div class="step-title">
       <h2>Choose your stop</h2>
       <span>${escapeHtml(r.label)} toward ${escapeHtml(dir.label)}</span>
@@ -2434,6 +2403,7 @@ function renderAlightStep() {
     </div>
     ${hintMarkup()}
     ${toolbarMarkup({ backId: "backToDirections", backLabel: "Back" })}
+    </div>
   `);
   document.querySelectorAll("[data-alight]").forEach((button) => {
     button.addEventListener("click", () => addLeg(button.dataset.alight));
@@ -2685,7 +2655,7 @@ function renderResult() {
         <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === puzzleCount() ? "Summary" : "Next puzzle"}</button>
       </div>
     </div>
-  `);
+  `, { showRouteSummary: false });
   $("#nextPuzzle").addEventListener("click", goNextPuzzle);
 }
 
