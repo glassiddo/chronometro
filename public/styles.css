@@ -640,6 +640,7 @@ h1 {
   border-color: var(--ok);
   background: #eef8f2;
   box-shadow: inset 0 0 0 3px rgba(0,107,63,.28);
+  padding-block: 11px;
 }
 
 .destination-choice strong {
@@ -652,8 +653,10 @@ h1 {
 }
 
 .destination-choice .stop-main > small {
+  display: block;
   color: var(--ok);
   font-weight: 900;
+  line-height: 1.1;
   text-transform: uppercase;
 }
 
