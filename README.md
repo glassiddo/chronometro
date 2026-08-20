@@ -1,5 +1,7 @@
 # Chronométro
 
+<img width="1218" height="916" alt="image" src="https://github.com/user-attachments/assets/8b186ba1-e541-4f1f-91a7-4da5296fe549" />
+
 Chronométro is a daily route puzzle based on the Paris transport network. Each day has five journeys. Pick the lines, directions, stops, and walking connections that get you from one station to another in the least time.
 
 Play at [chronometro.cc](https://chronometro.cc/).
