@@ -1,39 +1,53 @@
 # Chronométro
 
-<img width="1218" height="916" alt="image" src="https://github.com/user-attachments/assets/8b186ba1-e541-4f1f-91a7-4da5296fe549" />
+<img width="900" alt="Chronométro daily route puzzle screen" src="https://github.com/user-attachments/assets/8b186ba1-e541-4f1f-91a7-4da5296fe549">
 
-Chronométro is a daily route puzzle based on the Paris transport network. Each day has five journeys. Pick the lines, directions, stops, and walking connections that get you from one station to another in the least time.
+Chronométro is a static daily route puzzle built from Paris public transport data.
+It uses GTFS timetable data to model the Metro, RER A to E, and tram lines T1 to
+T14 as a weighted graph, then uses Dijkstra's algorithm to find the lowest
+estimated travel-time route between two stations.
 
 Play at [chronometro.cc](https://chronometro.cc/).
 
-## How it works
+Most of the work is in the data pipeline and route model:
 
-The game represents stations and connections as a weighted graph. It uses Dijkstra's algorithm to find the route with the lowest estimated travel time.
+- parsing and filtering GTFS public transport data
+- representing stations, lines, transfers, and walking links as graph data
+- shortest-path routing with estimated ride, wait, and transfer times
+- scoring routes by comparing a player's travel time with the stored fastest route
+- generating and validating static JSON puzzle data for a deployed daily site
 
-Travel time includes:
+## Technical overview
 
-- time on the train or tram
-- estimated waiting time
-- transfers and walking links included in the source data
+`scripts/build_data.py` reads the local GTFS export in `gouv_paris_gtfs-export/`,
+keeps Metro, RER A to E, and tram services, collapses stops to stations, derives
+ride times, wait estimates, transfers, and station equivalences, then writes the
+network and puzzle JSON under `public/data/`.
 
-Waiting times use half the median scheduled gap between departures from 7:00-10:00 AM. The model does not include the time needed to enter the first station or reach the initial platform.
+The generated daily puzzles live in `public/data/daily/`. The static site in
+`public/` loads the network and daily puzzle files in the browser. `public/app.js`
+handles route building, timing, scoring, and result display. `scripts/verify_timing_model.py`
+checks the generated bundle against timing and puzzle-pool constraints.
 
-An exact match with the stored fastest route scores 100 points. Other successful routes score from 10 to 99 based on their extra travel time. Giving up scores 0. The five daily puzzles add up to a maximum of 500 points.
+## Data
 
-## Network data
-
-The current game data comes from an ITO World modified GTFS export based on Île-de-France Mobilités data:
+The current data comes from an ITO World modified GTFS export based on
+Île-de-France Mobilités data:
 
 - version `20260630_200738`
 - valid from 27 June to 29 July 2026
 
-The game includes the Metro, RER A to E, and tram lines T1 to T14. Buses, ORLYVAL, and CDG VAL are not included.
+Buses, ORLYVAL, CDG VAL, and non-RER rail services are excluded.
 
-This is a fixed timetable snapshot. It does not account for current delays, closures, disruptions, accessibility, fares, or later network changes.
+## Limitations
 
-## Privacy
+Travel times are approximate. Ride times, waits, and transfers depend on the GTFS
+snapshot and the assumptions in the timing model, including half the median
+scheduled gap between departures from 7:00 to 10:00 AM.
 
-Chronométro has no accounts or cookies and does not save progress in the browser. Routes and scores disappear when the page is reloaded or closed.
+The site does not use live service data, disruptions, closures, fares,
+accessibility constraints, or later network changes. It also does not include
+time to enter the first station or reach the initial platform.
 
 ## Credits
 
