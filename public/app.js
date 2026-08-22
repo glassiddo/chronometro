@@ -2040,8 +2040,9 @@ function bindPuzzleToolbar() {
 function boardShell(content, { showRouteSummary = true } = {}) {
   const puzzle = currentPuzzle();
   const hasRouteSummary = showRouteSummary && state.steps.length > 0;
+  const boardClass = showRouteSummary ? "board" : "board board--result";
   $("#game").innerHTML = `
-    <div class="board">
+    <div class="${boardClass}">
       <aside class="side">
         <div class="station-pair">
           <div class="station"><span>Depart</span><strong>${escapeHtml(station(puzzle.start).name)}</strong></div>
