@@ -17,7 +17,6 @@ const state = {
   stage: "line",
   selected: {},
   results: [],
-  hintText: "",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -203,19 +202,23 @@ function renderRouteList(steps, { showDirection = true, showDetail = true, showE
     .join("");
 }
 
-function finalStationLineHint() {
-  const puzzle = currentPuzzle();
+function stationLineIds(stationId) {
   const lines = new Map();
   Object.values(state.data.directions).forEach((dir) => {
-    if (!dir.stations.some((stationId) => sameStation(stationId, puzzle.end))) return;
+    if (!dir.stations.some((candidateId) => sameStation(candidateId, stationId))) return;
     const r = route(dir.routeId);
-    lines.set(dir.routeId, `${modeName(r.mode)} ${r.label}`);
+    if (r) lines.set(dir.routeId, `${modeName(r.mode)} ${r.label}`);
   });
-  return [...lines.values()].sort(compareText).join(", ");
+  return [...lines.keys()].sort((a, b) => {
+    const ar = route(a);
+    const br = route(b);
+    return compareText(`${modeName(ar.mode)} ${ar.label}`, `${modeName(br.mode)} ${br.label}`);
+  });
 }
 
-function hintMarkup() {
-  return state.hintText ? `<p class="hint">${escapeHtml(state.hintText)}</p>` : "";
+function stationLineBadges(stationId) {
+  const badges = stationLineIds(stationId).map(lineBadge).join("");
+  return badges ? `<span class="station-lines" aria-label="Connecting lines">${badges}</span>` : "";
 }
 
 const PARIS_MAP = {
@@ -2007,11 +2010,9 @@ function orientationMapMarkup() {
 }
 
 function toolbarMarkup({ backId = "", backLabel = "" } = {}) {
-  const destinationLinesLabel = state.hintText ? "Hide destination's lines" : "Show destination's lines";
   return `
     <div class="toolbar">
       ${backId ? `<button class="action secondary" id="${backId}">${escapeHtml(backLabel)}</button>` : ""}
-      <button class="action secondary" id="hintButton">${destinationLinesLabel}</button>
       <button class="action secondary" id="resetRoute">Reset route</button>
       <button class="action secondary" id="giveUp">Give up</button>
     </div>
@@ -2019,20 +2020,6 @@ function toolbarMarkup({ backId = "", backLabel = "" } = {}) {
 }
 
 function bindPuzzleToolbar() {
-  const hintButton = $("#hintButton");
-  if (hintButton) {
-    hintButton.addEventListener("click", () => {
-      if (state.hintText) {
-        state.hintText = "";
-      } else {
-        const lines = finalStationLineHint();
-        state.hintText = lines ? `Final station is served by: ${lines}` : "No line hint is available for this station.";
-      }
-      if (state.stage === "direction") renderDirectionStep();
-      else if (state.stage === "alight") renderAlightStep();
-      else renderLineStep();
-    });
-  }
   $("#resetRoute").addEventListener("click", startPuzzle);
   $("#giveUp").addEventListener("click", giveUp);
 }
@@ -2045,8 +2032,16 @@ function boardShell(content, { showRouteSummary = true } = {}) {
     <div class="${boardClass}">
       <aside class="side">
         <div class="station-pair">
-          <div class="station"><span>Depart</span><strong>${escapeHtml(station(puzzle.start).name)}</strong></div>
-          <div class="station"><span>Arrive</span><strong>${escapeHtml(station(puzzle.end).name)}</strong></div>
+          <div class="station">
+            <span>Depart</span>
+            <strong>${escapeHtml(station(puzzle.start).name)}</strong>
+            ${stationLineBadges(puzzle.start)}
+          </div>
+          <div class="station">
+            <span>Arrive</span>
+            <strong>${escapeHtml(station(puzzle.end).name)}</strong>
+            ${stationLineBadges(puzzle.end)}
+          </div>
         </div>
         ${orientationMapMarkup()}
         ${
@@ -2249,7 +2244,7 @@ function renderLineStep(message = "") {
                 .map((option, index) => {
                   const r = route(option.routeId);
                   const hasNearbyBoard = option.boards.some((board) => board.boardStation !== state.currentStation);
-                  const transferLabel = hasNearbyBoard ? "Board here or nearby" : state.steps.length ? "" : "Board here";
+                  const transferLabel = hasNearbyBoard ? "Board here or nearby" : "";
                   return `
                     <button class="choice line-choice" data-line-index="${index}">
                       ${lineBadge(option.routeId)}
@@ -2290,7 +2285,6 @@ function renderLineStep(message = "") {
         : ""
     }
     ${message ? `<p class="notice">${escapeHtml(message)}</p>` : ""}
-    ${hintMarkup()}
     ${toolbarMarkup()}
   `);
 
@@ -2354,7 +2348,6 @@ function renderDirectionStep() {
         })
         .join("")}
     </div>
-    ${hintMarkup()}
     ${toolbarMarkup({ backId: "backToLines", backLabel: "Back" })}
   `);
   document.querySelectorAll("[data-direction-index]").forEach((button) => {
@@ -2415,7 +2408,6 @@ function renderAlightStep() {
         )
         .join("")}
     </div>
-    ${hintMarkup()}
     ${toolbarMarkup({ backId: "backToDirections", backLabel: "Back" })}
     </div>
   `);
@@ -2836,7 +2828,6 @@ function startPuzzle() {
   state.steps = [];
   state.totalSec = 0;
   state.selected = {};
-  state.hintText = "";
   setRoundLabel();
   renderLineStep();
 }
