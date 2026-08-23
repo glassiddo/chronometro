@@ -407,6 +407,7 @@ h1 {
 
 .map-marker circle {
   stroke: none;
+  r: 7px;
 }
 
 .map-marker text {
@@ -1017,6 +1018,14 @@ h1 {
     aspect-ratio: auto;
   }
 
+  .map-marker circle {
+    r: 8px;
+  }
+
+  .map-marker text {
+    font-size: 13px;
+  }
+
   .board--result .side {
     grid-template-columns: 1fr;
   }
@@ -1135,17 +1144,20 @@ h1 {
   }
 
   .stop-main {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 4px 8px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 8px;
   }
 
   .stop-main strong {
-    overflow-wrap: normal;
+    grid-column: 1 / -1;
+    overflow-wrap: anywhere;
+    font-size: 15px;
+    line-height: 1.16;
   }
 
   .stop-meta {
-    grid-column: 3;
-    grid-row: 1;
+    grid-column: 2;
+    grid-row: 2;
     flex-wrap: nowrap;
     justify-content: end;
     min-width: 0;
@@ -1153,10 +1165,10 @@ h1 {
   }
 
   .transfer-lines {
-    grid-column: 2;
-    grid-row: 1;
-    flex-wrap: nowrap;
-    justify-content: end;
+    grid-column: 1;
+    grid-row: 2;
+    flex-wrap: wrap;
+    justify-content: start;
   }
 
   .transfer-lines .line-badge {

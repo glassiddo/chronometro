@@ -1937,7 +1937,7 @@ const PARIS_MAP = {
 
 function mapPoint({ lat, lon }) {
   const { bounds, width, height } = PARIS_MAP;
-  const pad = 18;
+  const pad = 12;
   const x = pad + ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * (width - pad * 2);
   const y = pad + ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * (height - pad * 2);
   return {
@@ -2565,12 +2565,55 @@ function routeSignature(steps) {
     .join("|");
 }
 
-function scoreRoute(puzzle, signature, totalSec) {
+function fastestRideTimingForLeg(step, previousRide) {
+  const r = route(step.routeId);
+  if (!r) return null;
+  const candidates = boardableDirectionIds(step.from, step.routeId)
+    .map((directionId) => {
+      const rideSec = runtimeBetween(directionId, step.from, step.to);
+      if (!Number.isFinite(rideSec)) return null;
+      const transferSec = previousRide
+        ? transferSeconds(
+            step.from,
+            step.from,
+            previousRide.routeId,
+            step.routeId,
+            route(previousRide.routeId).mode,
+            r.mode,
+          )
+        : Number(step.transferSec) || 0;
+      if (!Number.isFinite(transferSec)) return null;
+      const waitSec = waitSeconds(directionId, step.routeId, r.mode);
+      return { rideSec, waitSec, transferSec, elapsedSec: rideSec + waitSec + transferSec };
+    })
+    .filter(Boolean);
+  return candidates.reduce((best, candidate) => (!best || candidate.elapsedSec < best.elapsedSec ? candidate : best), null);
+}
+
+function bestComparableTotalSec(steps, fallbackTotalSec) {
+  let totalSec = 0;
+  let previousRide = null;
+  for (const step of steps) {
+    if (stepType(step) === "walk") {
+      totalSec += Number.isFinite(step.elapsedSec) ? step.elapsedSec : Number(step.transferSec) || 0;
+      previousRide = null;
+      continue;
+    }
+    const bestTiming = fastestRideTimingForLeg(step, previousRide);
+    totalSec += bestTiming?.elapsedSec ?? step.elapsedSec ?? 0;
+    previousRide = step;
+  }
+  return Number.isFinite(totalSec) && totalSec > 0 ? totalSec : fallbackTotalSec;
+}
+
+function scoreRoute(puzzle, signature, totalSec, steps = []) {
   const optimal = puzzle.optimalRoute;
   const exact = signature === optimal.signature;
-  if (exact) return { score: 100, label: "Perfect" };
+  const comparableTotalSec = Math.min(totalSec, bestComparableTotalSec(steps, totalSec));
+  const perfect = exact || Math.max(0, comparableTotalSec - optimal.totalSec) <= 1;
+  if (perfect) return { score: 100, label: "Perfect" };
 
-  const deltaSec = Math.max(0, totalSec - optimal.totalSec);
+  const deltaSec = Math.max(0, comparableTotalSec - optimal.totalSec);
   const deltaMin = deltaSec / 60;
   const slowPct = (deltaSec / optimal.totalSec) * 100;
   const rawScore = 100 - deltaMin * 3 - slowPct * 0.6;
@@ -2652,7 +2695,7 @@ function precomputedSteps(routeInfo) {
 function renderResult() {
   const puzzle = currentPuzzle();
   const signature = routeSignature(state.steps);
-  const scored = scoreRoute(puzzle, signature, state.totalSec);
+  const scored = scoreRoute(puzzle, signature, state.totalSec, state.steps);
   const optimal = puzzle.optimalRoute;
   const optimalSteps = precomputedSteps(optimal);
   state.results[state.puzzleIndex] = {
