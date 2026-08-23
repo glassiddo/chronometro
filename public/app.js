@@ -2709,7 +2709,6 @@ function renderResult() {
     <div class="result">
       <div class="step-title">
         <h2>${scored.label}</h2>
-        <span>Puzzle ${state.puzzleIndex + 1}</span>
       </div>
       <div class="scoreboard">
         <div class="scorebox"><span>Score</span><strong>${scored.score}</strong></div>
@@ -2741,7 +2740,6 @@ function giveUp() {
     <div class="result">
       <div class="step-title">
         <h2>Gave up</h2>
-        <span>Puzzle ${state.puzzleIndex + 1}</span>
       </div>
       <div class="scoreboard">
         <div class="scorebox"><span>Score</span><strong>0</strong></div>
