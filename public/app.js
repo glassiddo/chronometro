@@ -29,6 +29,12 @@ function station(id) {
   return state.data.stations[id] || { id, name: id };
 }
 
+function stationDisplayName(stationId) {
+  const name = station(stationId).name;
+  if (CITY_ID !== "london") return name;
+  return name.replace(/\s*\([^)]*Line[^)]*\)/gi, "").replace(/-Underground$/i, "").trim();
+}
+
 function canonicalStationId(stationId) {
   return state.data.canonicalStationIds?.[stationId] || stationId;
 }
@@ -157,7 +163,9 @@ function lineChoiceMarker(routeId) {
 
 function routeDisplayName(r) {
   const label = r?.label || "";
-  return CITY_ID === "london" ? label.replace(/\s+line$/i, "") : label;
+  if (CITY_ID !== "london") return label;
+  if (label === "Hammersmith & City") return "H&C";
+  return label.replace(/\s+line$/i, "");
 }
 
 function routeChoiceLabel(r) {
@@ -203,7 +211,7 @@ function renderRouteList(steps, { showDirection = true, showDetail = true, showE
         <div class="leg-chip walk-chip">
           <span class="walk-badge">Walk</span>
           <p>
-            <strong>Walk to ${escapeHtml(station(step.to).name)}</strong>
+            <strong>Walk to ${escapeHtml(stationDisplayName(step.to))}</strong>
             ${detail ? `<small class="leg-detail">${escapeHtml(detail)}</small>` : ""}
           </p>
           ${elapsed}
@@ -214,7 +222,7 @@ function renderRouteList(steps, { showDirection = true, showDetail = true, showE
         <div class="leg-chip">
           ${lineBadge(step.routeId)}
           <p>
-            <strong>${escapeHtml(station(step.from).name)} → ${escapeHtml(station(step.to).name)}</strong>
+            <strong>${escapeHtml(stationDisplayName(step.from))} → ${escapeHtml(stationDisplayName(step.to))}</strong>
             ${showDirection ? `<small>Direction ${escapeHtml(direction(step.directionId).label)}</small>` : ""}
             ${detail ? `<small class="leg-detail">${escapeHtml(detail)}</small>` : ""}
           </p>
@@ -240,24 +248,31 @@ function stationLineIds(stationId) {
   });
 }
 
+function stationInterchangeRouteIds(stationId) {
+  if (CITY_ID !== "london") return [];
+  const ownRouteIds = new Set(stationLineIds(stationId));
+  const connectedStationIds = new Set(Object.keys(state.data.transfers?.[stationId] || {}));
+  Object.entries(state.data.transfers || {}).forEach(([connectedId, destinations]) => {
+    if (Number.isFinite(destinations?.[stationId])) connectedStationIds.add(connectedId);
+  });
+  const connectedRouteIds = new Set();
+  connectedStationIds.forEach((connectedId) => {
+    stationLineIds(connectedId).forEach((routeId) => {
+      if (!ownRouteIds.has(routeId)) connectedRouteIds.add(routeId);
+    });
+  });
+  return [...connectedRouteIds].sort((a, b) => compareText(routeDisplayName(route(a)), routeDisplayName(route(b))));
+}
+
 function stationLineBadges(stationId) {
   const badges = stationLineIds(stationId).map(lineBadge).join("");
   if (CITY_ID !== "london") return badges ? `<span class="station-lines" aria-label="Connecting lines">${badges}</span>` : "";
   const ownRouteIds = new Set(stationLineIds(stationId));
-  const connections = new Map();
-  Object.entries(state.data.transfers?.[stationId] || {}).forEach(([connectedId, seconds]) => {
-    if (Number.isFinite(seconds)) connections.set(connectedId, seconds);
-  });
-  Object.entries(state.data.transfers || {}).forEach(([connectedId, destinations]) => {
-    const seconds = destinations?.[stationId];
-    if (Number.isFinite(seconds) && !connections.has(connectedId)) connections.set(connectedId, seconds);
-  });
-  const connectionMarkup = [...connections.keys()].map((connectedId) => {
-    const connectedRouteIds = stationLineIds(connectedId).filter((routeId) => !ownRouteIds.has(routeId));
-    if (!connectedRouteIds.length) return "";
-    return `<span class="station-connection"><small>Interchange</small><span class="station-lines">${connectedRouteIds.map(lineBadge).join("")}</span></span>`;
-  }).filter(Boolean).join("");
-  const serviceLabel = ownRouteIds.size > 1 ? `<span class="station-service-label">At this station</span>` : "";
+  const sortedConnectedRouteIds = stationInterchangeRouteIds(stationId);
+  const connectionMarkup = sortedConnectedRouteIds.length
+    ? `<span class="station-connection"><small>Interchange</small><span class="station-lines">${sortedConnectedRouteIds.map(lineBadge).join("")}</span></span>`
+    : "";
+  const serviceLabel = ownRouteIds.size > 1 && connectionMarkup ? `<span class="station-service-label">At this station</span>` : "";
   return `${badges ? `${serviceLabel}<span class="station-lines" aria-label="Lines at this station">${badges}</span>` : ""}${connectionMarkup}`;
 }
 
@@ -1999,14 +2014,6 @@ function configureCityMap() {
     ],
     airport: [[-0.493,51.453],[-0.414,51.453],[-0.418,51.481],[-0.488,51.481]],
     waterway: [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
-    labels: [
-      { text: "Heathrow", lat: 51.470, lon: -0.454 },
-      { text: "Hyde Park", lat: 51.508, lon: -0.172 },
-      { text: "Hampstead Heath", lat: 51.566, lon: -0.181 },
-      { text: "Richmond Park", lat: 51.450, lon: -0.282 },
-      { text: "Greenwich Park", lat: 51.482, lon: 0.018 },
-    ],
-    landmarkStationIds: ["940GZZLUOXC","940GZZLUKSX","940GZZLUBNK","940GZZLUWLO","940GZZLUVIC","940GZZLULNB","940GZZLUSTD","940GZZLUCYF","940GZZLUWYP","940GZZLUWIM"],
   };
 }
 
@@ -2090,19 +2097,9 @@ function mapMarker(stationId, label, className) {
   `;
 }
 
-function mapLabelMarkup(item) {
-  const bounds = CITY_MAP.viewBounds || CITY_MAP.bounds;
-  if (item.lat < bounds.minLat || item.lat > bounds.maxLat || item.lon < bounds.minLon || item.lon > bounds.maxLon) return "";
-  const { x, y } = mapPoint(item);
-  return `<text class="map-place-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}">${escapeHtml(item.text)}</text>`;
-}
-
 function orientationMapMarkup() {
   const puzzle = currentPuzzle();
   fitLondonMapToPuzzle();
-  const landmarkLabels = (CITY_MAP.landmarkStationIds || [])
-    .filter((stationId) => !sameStation(stationId, puzzle.start) && !sameStation(stationId, puzzle.end) && !sameStation(stationId, state.currentStation))
-    .map((stationId) => ({ text: station(stationId).name, lat: station(stationId).lat, lon: station(stationId).lon }));
   const current =
     state.currentStation && !sameStation(state.currentStation, puzzle.start) && !sameStation(state.currentStation, puzzle.end)
       ? mapMarker(state.currentStation, "Current", "current-marker")
@@ -2117,7 +2114,6 @@ function orientationMapMarkup() {
         ${CITY_MAP.airport ? `<path class="map-airport" d="${mapCurvePath(CITY_MAP.airport, true)}"></path>` : ""}
         ${CITY_MAP.outline.length ? `<path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>` : ""}
         <path class="waterway" d="${mapCurvePath(CITY_MAP.waterway)}"></path>
-        ${[...(CITY_MAP.labels || []), ...landmarkLabels].map(mapLabelMarkup).join("")}
         ${mapMarker(puzzle.start, "Start", "start-marker")}
         ${mapMarker(puzzle.end, "End", "end-marker")}
         ${current}
@@ -2151,12 +2147,12 @@ function boardShell(content, { showRouteSummary = true } = {}) {
         <div class="station-pair">
           <div class="station">
             <span>Depart</span>
-            <strong>${escapeHtml(station(puzzle.start).name)}</strong>
+            <strong>${escapeHtml(stationDisplayName(puzzle.start))}</strong>
             ${stationLineBadges(puzzle.start)}
           </div>
           <div class="station">
             <span>Arrive</span>
-            <strong>${escapeHtml(station(puzzle.end).name)}</strong>
+            <strong>${escapeHtml(stationDisplayName(puzzle.end))}</strong>
             ${stationLineBadges(puzzle.end)}
           </div>
         </div>
@@ -2295,6 +2291,17 @@ function walkLineBadges(stationId) {
 function equivalentBoardingLocations(stationId) {
   const currentCanonical = canonicalStationId(stationId);
   const locations = [{ stationId, walkSec: 0 }];
+  if (CITY_ID === "london") {
+    const linkedIds = new Set(Object.keys(state.data.transfers?.[stationId] || {}));
+    Object.entries(state.data.transfers || {}).forEach(([linkedId, destinations]) => {
+      if (Number.isFinite(destinations?.[stationId])) linkedIds.add(linkedId);
+    });
+    linkedIds.forEach((linkedId) => {
+      const walkSec = explicitWalkSeconds(stationId, linkedId);
+      if (Number.isFinite(walkSec) && walkSec >= 0) locations.push({ stationId: linkedId, walkSec });
+    });
+    return locations.sort((a, b) => a.walkSec - b.walkSec || compareText(stationDisplayName(a.stationId), stationDisplayName(b.stationId)));
+  }
   Object.keys(state.data.stations || {}).forEach((transferStationId) => {
     const walkSec = equivalentWalkSeconds(stationId, transferStationId);
     if (!Number.isFinite(walkSec) || walkSec < 0) return;
@@ -2348,7 +2355,7 @@ function renderLineStep(message = "") {
   boardShell(`
     <div class="step-title">
       <h2>Choose your next move</h2>
-      <span>From ${escapeHtml(station(state.currentStation).name)}</span>
+      <span>From ${escapeHtml(stationDisplayName(state.currentStation))}</span>
     </div>
     ${
       options.length
@@ -2359,7 +2366,7 @@ function renderLineStep(message = "") {
                 .map((option, index) => {
                   const r = route(option.routeId);
                   const hasNearbyBoard = option.boards.some((board) => board.boardStation !== state.currentStation);
-                  const transferLabel = hasNearbyBoard ? "Board here or nearby" : "";
+                  const transferLabel = hasNearbyBoard ? "Board here" : "";
                   return `
                     <button class="choice line-choice" data-line-index="${index}">
                       ${lineChoiceMarker(option.routeId)}
@@ -2385,7 +2392,7 @@ function renderLineStep(message = "") {
                   (option, index) => `
                     <button class="choice walk-choice" data-walk-index="${index}">
                       <span class="walk-copy">
-                        <strong>Walk to ${escapeHtml(station(option.stationId).name)}</strong>
+                        <strong>Walk to ${escapeHtml(stationDisplayName(option.stationId))}</strong>
                         <span class="walk-meta">
                           <small>${formatCompactTime(option.walkSec)} transfer</small>
                           ${walkLineBadges(option.stationId)}
@@ -2447,7 +2454,7 @@ function renderDirectionStep() {
               ? state.steps.length
                 ? ""
                 : "Board here"
-              : `After ${formatCompactTime(candidate.walkSec)} walk from ${escapeHtml(station(state.currentStation).name)}`;
+              : `After ${formatCompactTime(candidate.walkSec)} walk from ${escapeHtml(stationDisplayName(state.currentStation))}`;
           return `
             <button class="choice" data-direction-index="${index}">
               <strong>${escapeHtml(option.label)}</strong>
@@ -2492,8 +2499,9 @@ function renderAlightStep() {
     }
     downstream.forEach((stationId) => {
       const runSec = runtimeBetween(candidate.dirId, candidate.boardStation, stationId);
-      const existing = choiceMap.get(stationId);
-      if (!existing || runSec < existing.runSec) choiceMap.set(stationId, { stationId, runSec, ...candidate });
+      const choiceKey = CITY_ID === "london" ? stationDisplayName(stationId) : stationId;
+      const existing = choiceMap.get(choiceKey);
+      if (!existing || runSec < existing.runSec) choiceMap.set(choiceKey, { stationId, runSec, ...candidate });
     });
   });
   const choices = [...choiceMap.values()];
@@ -2503,7 +2511,9 @@ function renderAlightStep() {
     const stationId = choice.stationId;
     const runSec = choice.runSec;
     const services = station(stationId).services || {};
-    const transferBadges = Object.keys(services)
+    const availableRouteIds = new Set(Object.keys(services));
+    stationInterchangeRouteIds(stationId).forEach((routeId) => availableRouteIds.add(routeId));
+    const transferBadges = [...availableRouteIds]
       .filter((routeId) => routeId !== selected.routeId && route(routeId))
       .sort((a, b) => compareText(route(a).label, route(b).label))
       .map(lineBadge)
@@ -2517,16 +2527,16 @@ function renderAlightStep() {
     <div class="stop-selection">
     <div class="step-title">
       <h2>Choose your stop</h2>
-      <span>${escapeHtml(r.label)} toward ${escapeHtml(dir.label)}</span>
+      <span>${escapeHtml(routeDisplayName(r))} toward ${escapeHtml(dir.label)}</span>
     </div>
-    <div class="stop-strip" aria-label="${escapeHtml(r.label)} stops toward ${escapeHtml(dir.label)}">
+    <div class="stop-strip" aria-label="${escapeHtml(routeDisplayName(r))} stops toward ${escapeHtml(dir.label)}">
       ${choices
         .map(
           (choice) => `
             <button class="choice stop-choice${sameStation(choice.stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(choice.stationId)}" data-direction-id="${escapeHtml(choice.dirId)}" data-board-station="${escapeHtml(choice.boardStation)}">
               <span class="stop-node" aria-hidden="true"></span>
               <span class="stop-main">
-                <strong>${escapeHtml(station(choice.stationId).name)}</strong>
+                <strong>${escapeHtml(stationDisplayName(choice.stationId))}</strong>
                 ${transferSignal(choice)}
               </span>
             </button>

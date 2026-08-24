@@ -500,16 +500,6 @@ h1 {
   text-anchor: middle;
 }
 
-.map-place-label {
-  paint-order: stroke;
-  stroke: #f3efe4;
-  stroke-width: 3px;
-  fill: #746f66;
-  font-size: 9px;
-  font-weight: 800;
-  text-anchor: middle;
-}
-
 .start-marker circle {
   fill: var(--accent);
 }
