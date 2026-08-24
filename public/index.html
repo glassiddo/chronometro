@@ -3,23 +3,30 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="A daily Paris route puzzle. Plan the fastest route from one station to another" />
+    <meta name="description" content="A daily transit route puzzle. Plan the fastest route from one station to another" />
     <title>Chronométro</title>
     <link rel="icon" href="./favicon.svg?v=20260818" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=20260822b" />
+    <link rel="stylesheet" href="./styles.css?v=20260824-london-map" />
   </head>
   <body>
     <a class="skip-link" href="#game">Skip to game</a>
     <main class="shell">
       <header class="masthead">
         <div>
-          <p class="kicker">Paris daily route puzzle</p>
+          <p class="kicker" id="cityKicker">Paris daily route puzzle</p>
           <button class="home-title" id="homeButton" type="button" aria-label="Restart Chronométro">
             Chronométro
           </button>
           <p class="objective">Plan the fastest route from one station to another</p>
         </div>
         <div class="date-lockup">
+          <label class="city-picker">
+            <span>Choose city</span>
+            <select id="citySelector" aria-label="Choose puzzle city">
+              <option value="paris">Paris</option>
+              <option value="london">London</option>
+            </select>
+          </label>
           <span id="todayLabel"></span>
           <strong id="roundLabel">1 / 5</strong>
         </div>
@@ -33,10 +40,10 @@
           <a href="./rules.html">Rules</a>
           <a href="./legal.html">About</a>
         </nav>
-        <p>Chronométro is not affiliated with or endorsed by RATP or Île-de-France Mobilités.</p>
+        <p id="cityDisclaimer">Chronométro is not affiliated with or endorsed by RATP or Île-de-France Mobilités.</p>
       </footer>
     </main>
 
-    <script src="./app.js?v=20260822b"></script>
+    <script src="./app.js?v=20260824-london-map-b"></script>
   </body>
 </html>

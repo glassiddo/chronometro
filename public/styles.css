@@ -90,6 +90,30 @@ button {
   text-transform: uppercase;
 }
 
+.city-picker {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.city-picker select {
+  min-width: 154px;
+  border: 2px solid var(--rail);
+  border-radius: 6px;
+  padding: 7px 30px 7px 10px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 h1,
 h2,
 h3,
@@ -383,6 +407,25 @@ h1 {
   text-align: center;
 }
 
+.station-service-label,
+.station-connection {
+  display: block;
+  margin-top: 6px;
+}
+
+.station-service-label,
+.station-connection > small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.station-connection .station-lines {
+  margin-top: 3px;
+}
+
 .intro-prompt {
   margin: -2px 0 0;
   padding: 10px 12px;
@@ -409,12 +452,22 @@ h1 {
   aspect-ratio: 16 / 11;
 }
 
+[data-city="london"] .orientation-map svg {
+  aspect-ratio: 2 / 1;
+}
+
 .map-bg {
   fill: #f3efe4;
 }
 
 .map-park {
   fill: rgba(93, 142, 89, .18);
+}
+
+.map-airport {
+  fill: rgba(91, 99, 107, .2);
+  stroke: rgba(91, 99, 107, .45);
+  stroke-width: 1;
 }
 
 .city-outline {
@@ -444,6 +497,16 @@ h1 {
   fill: var(--ink);
   font-size: 12px;
   font-weight: 900;
+  text-anchor: middle;
+}
+
+.map-place-label {
+  paint-order: stroke;
+  stroke: #f3efe4;
+  stroke-width: 3px;
+  fill: #746f66;
+  font-size: 9px;
+  font-weight: 800;
   text-anchor: middle;
 }
 
@@ -522,6 +585,49 @@ h1 {
   border: 2px solid rgba(0,0,0,.2);
   font-weight: 900;
   color: #fff;
+}
+
+.line-swatch {
+  display: block;
+  width: 54px;
+  height: 12px;
+  border: 2px solid rgba(0,0,0,.18);
+  border-radius: 3px;
+}
+
+[data-city="london"] .station-lines .line-badge {
+  flex: 0 1 auto;
+  inline-size: auto;
+  width: auto;
+  min-width: 46px;
+  max-width: 116px;
+  height: auto;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+[data-city="london"] .leg-chip .line-badge,
+[data-city="london"] .transfer-lines .line-badge,
+[data-city="london"] .walk-lines .line-badge,
+[data-city="london"] .line-choice .line-badge {
+  max-width: 112px;
+  height: auto;
+  min-height: 30px;
+  padding-block: 4px;
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.05;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+[data-city="london"] .route-panel .line-badge {
+  max-width: 92px;
+  font-size: 10px;
 }
 
 .walk-badge {
@@ -993,7 +1099,13 @@ h1 {
   }
 
   .date-lockup {
-    justify-items: start;
+    justify-items: end;
+  }
+
+  .city-picker select {
+    min-width: 132px;
+    padding-block: 6px;
+    font-size: 14px;
   }
 
   .game {
@@ -1046,6 +1158,16 @@ h1 {
     height: 20px;
     padding: 0;
     font-size: 10px;
+  }
+
+  [data-city="london"] .station-lines .line-badge {
+    inline-size: auto;
+    width: auto;
+    min-width: 42px;
+    max-width: 92px;
+    height: auto;
+    min-height: 20px;
+    font-size: 9px;
   }
 
   .route-summary h3 {

@@ -336,7 +336,11 @@ def main() -> None:
     require('"steps": steps' in build, "backend does not emit route steps")
     require("function canonicalStationId(" in app and "function sameStation(" in app, "frontend lacks canonical station helpers")
     require("sameStation(toStation, currentPuzzle().end)" in app, "frontend completion still uses raw station ids")
-    require("sameStation(stationId, currentPuzzle().end)" in app, "frontend destination labels still use raw station ids")
+    require(
+        "sameStation(choice.stationId, currentPuzzle().end)" in app
+        or "sameStation(stationId, currentPuzzle().end)" in app,
+        "frontend destination labels still use raw station ids",
+    )
     require("canonical_station_ids, station_equivalents = build_station_equivalents(" in build, "backend does not emit station equivalences")
     require("wait_by_direction.get(" in build and "wait_by_route.get(" in build, "backend wait fallback order changed")
     require("self.route_transfers.get(" in build and "fallback_transfer" in build, "backend transfer fallback order changed")

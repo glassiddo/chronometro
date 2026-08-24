@@ -1,4 +1,6 @@
-const CITY_ID = "paris";
+const SUPPORTED_CITY_IDS = new Set(["paris", "london"]);
+const requestedCityId = new URLSearchParams(window.location.search).get("city");
+const CITY_ID = SUPPORTED_CITY_IDS.has(requestedCityId) ? requestedCityId : "paris";
 const CITY_DATA_URL = `./data/${CITY_ID}`;
 const NETWORK_URL = `${CITY_DATA_URL}/network.json`;
 const DAILY_INDEX_URL = `${CITY_DATA_URL}/daily/index.json`;
@@ -144,7 +146,27 @@ function puzzleCount() {
 
 function lineBadge(routeId) {
   const r = route(routeId);
-  return `<span class="line-badge" style="background:${r.color};color:${r.textColor}">${r.label}</span>`;
+  return `<span class="line-badge" style="background:${r.color};color:${r.textColor}">${escapeHtml(routeDisplayName(r))}</span>`;
+}
+
+function lineChoiceMarker(routeId) {
+  const r = route(routeId);
+  if (CITY_ID !== "london") return lineBadge(routeId);
+  return `<span class="line-swatch" style="background:${r.color}" aria-hidden="true"></span>`;
+}
+
+function routeDisplayName(r) {
+  const label = r?.label || "";
+  return CITY_ID === "london" ? label.replace(/\s+line$/i, "") : label;
+}
+
+function routeChoiceLabel(r) {
+  return CITY_ID === "london" ? routeDisplayName(r) : `${modeName(r.mode)} ${r.label}`;
+}
+
+function directionGroupLabel(label) {
+  if (CITY_ID === "london" && /^Heathrow Terminal [45]$/i.test(label)) return "Heathrow";
+  return label;
 }
 
 function escapeHtml(value) {
@@ -220,10 +242,26 @@ function stationLineIds(stationId) {
 
 function stationLineBadges(stationId) {
   const badges = stationLineIds(stationId).map(lineBadge).join("");
-  return badges ? `<span class="station-lines" aria-label="Connecting lines">${badges}</span>` : "";
+  if (CITY_ID !== "london") return badges ? `<span class="station-lines" aria-label="Connecting lines">${badges}</span>` : "";
+  const ownRouteIds = new Set(stationLineIds(stationId));
+  const connections = new Map();
+  Object.entries(state.data.transfers?.[stationId] || {}).forEach(([connectedId, seconds]) => {
+    if (Number.isFinite(seconds)) connections.set(connectedId, seconds);
+  });
+  Object.entries(state.data.transfers || {}).forEach(([connectedId, destinations]) => {
+    const seconds = destinations?.[stationId];
+    if (Number.isFinite(seconds) && !connections.has(connectedId)) connections.set(connectedId, seconds);
+  });
+  const connectionMarkup = [...connections.keys()].map((connectedId) => {
+    const connectedRouteIds = stationLineIds(connectedId).filter((routeId) => !ownRouteIds.has(routeId));
+    if (!connectedRouteIds.length) return "";
+    return `<span class="station-connection"><small>Interchange</small><span class="station-lines">${connectedRouteIds.map(lineBadge).join("")}</span></span>`;
+  }).filter(Boolean).join("");
+  const serviceLabel = ownRouteIds.size > 1 ? `<span class="station-service-label">At this station</span>` : "";
+  return `${badges ? `${serviceLabel}<span class="station-lines" aria-label="Lines at this station">${badges}</span>` : ""}${connectionMarkup}`;
 }
 
-const CITY_MAP = {
+const PARIS_MAP = {
   "width": 320,
   "height": 220,
   "bounds": {
@@ -1940,11 +1978,75 @@ const CITY_MAP = {
   ]
 };
 
-function mapPoint({ lat, lon }) {
-  const { bounds, width, height } = CITY_MAP;
+let CITY_MAP = PARIS_MAP;
+
+function configureCityMap() {
+  if (CITY_ID === "paris") {
+    CITY_MAP = PARIS_MAP;
+    return;
+  }
+  CITY_MAP = {
+    width: 320,
+    height: 220,
+    bounds: { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
+    outline: [[-0.51,51.50],[-0.43,51.43],[-0.29,51.38],[-0.12,51.37],[0.05,51.40],[0.18,51.45],[0.24,51.53],[0.15,51.60],[0.02,51.64],[-0.17,51.65],[-0.34,51.61],[-0.47,51.56]],
+    parks: [
+      [[-0.194,51.500],[-0.153,51.500],[-0.151,51.516],[-0.188,51.516]],
+      [[-0.174,51.525],[-0.144,51.526],[-0.146,51.540],[-0.171,51.541]],
+      [[-0.206,51.550],[-0.153,51.552],[-0.162,51.581],[-0.205,51.574]],
+      [[-0.313,51.431],[-0.253,51.433],[-0.258,51.470],[-0.302,51.472]],
+      [[-0.006,51.472],[0.041,51.474],[0.035,51.493],[0.001,51.490]],
+    ],
+    airport: [[-0.493,51.453],[-0.414,51.453],[-0.418,51.481],[-0.488,51.481]],
+    waterway: [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
+    labels: [
+      { text: "Heathrow", lat: 51.470, lon: -0.454 },
+      { text: "Hyde Park", lat: 51.508, lon: -0.172 },
+      { text: "Hampstead Heath", lat: 51.566, lon: -0.181 },
+      { text: "Richmond Park", lat: 51.450, lon: -0.282 },
+      { text: "Greenwich Park", lat: 51.482, lon: 0.018 },
+    ],
+    landmarkStationIds: ["940GZZLUOXC","940GZZLUKSX","940GZZLUBNK","940GZZLUWLO","940GZZLUVIC","940GZZLULNB","940GZZLUSTD","940GZZLUCYF","940GZZLUWYP","940GZZLUWIM"],
+  };
+}
+
+function fitLondonMapToPuzzle() {
+  if (CITY_ID !== "london") {
+    CITY_MAP.viewBounds = CITY_MAP.bounds;
+    return;
+  }
+  const puzzle = currentPuzzle();
+  const points = [station(puzzle.start), station(puzzle.end)];
+  if (state.currentStation) points.push(station(state.currentStation));
+  const lats = points.map((point) => point.lat).filter(Number.isFinite);
+  const lons = points.map((point) => point.lon).filter(Number.isFinite);
+  if (!lats.length || !lons.length) {
+    CITY_MAP.viewBounds = CITY_MAP.bounds;
+    return;
+  }
+  const latMid = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const lonMid = (Math.min(...lons) + Math.max(...lons)) / 2;
+  const latSpan = Math.max(0.025, (Math.max(...lats) - Math.min(...lats)) * 1.55);
+  const lonSpan = Math.max(0.05, (Math.max(...lons) - Math.min(...lons)) * 1.55);
+  const clampRange = (mid, span, minimum, maximum) => {
+    let low = mid - span / 2;
+    let high = mid + span / 2;
+    if (low < minimum) { high += minimum - low; low = minimum; }
+    if (high > maximum) { low -= high - maximum; high = maximum; }
+    return [Math.max(minimum, low), Math.min(maximum, high)];
+  };
+  const [minLat, maxLat] = clampRange(latMid, latSpan, CITY_MAP.bounds.minLat, CITY_MAP.bounds.maxLat);
+  const [minLon, maxLon] = clampRange(lonMid, lonSpan, CITY_MAP.bounds.minLon, CITY_MAP.bounds.maxLon);
+  CITY_MAP.viewBounds = { minLat, maxLat, minLon, maxLon };
+}
+
+function mapPoint({ lat, lon }, clamp = true) {
+  const bounds = CITY_MAP.viewBounds || CITY_MAP.bounds;
+  const { width, height } = CITY_MAP;
   const pad = 12;
   const x = pad + ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * (width - pad * 2);
   const y = pad + ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * (height - pad * 2);
+  if (!clamp) return { x, y };
   return {
     x: Math.max(pad, Math.min(width - pad, x)),
     y: Math.max(pad, Math.min(height - pad, y)),
@@ -1952,7 +2054,7 @@ function mapPoint({ lat, lon }) {
 }
 
 function mapCurvePath(points, close = false) {
-  const projected = points.map(([lon, lat]) => mapPoint({ lat, lon }));
+  const projected = points.map(([lon, lat]) => mapPoint({ lat, lon }, false));
   if (projected.length < 2) return "";
   const path = [`M ${projected[0].x.toFixed(1)} ${projected[0].y.toFixed(1)}`];
   const total = projected.length;
@@ -1988,8 +2090,19 @@ function mapMarker(stationId, label, className) {
   `;
 }
 
+function mapLabelMarkup(item) {
+  const bounds = CITY_MAP.viewBounds || CITY_MAP.bounds;
+  if (item.lat < bounds.minLat || item.lat > bounds.maxLat || item.lon < bounds.minLon || item.lon > bounds.maxLon) return "";
+  const { x, y } = mapPoint(item);
+  return `<text class="map-place-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}">${escapeHtml(item.text)}</text>`;
+}
+
 function orientationMapMarkup() {
   const puzzle = currentPuzzle();
+  fitLondonMapToPuzzle();
+  const landmarkLabels = (CITY_MAP.landmarkStationIds || [])
+    .filter((stationId) => !sameStation(stationId, puzzle.start) && !sameStation(stationId, puzzle.end) && !sameStation(stationId, state.currentStation))
+    .map((stationId) => ({ text: station(stationId).name, lat: station(stationId).lat, lon: station(stationId).lon }));
   const current =
     state.currentStation && !sameStation(state.currentStation, puzzle.start) && !sameStation(state.currentStation, puzzle.end)
       ? mapMarker(state.currentStation, "Current", "current-marker")
@@ -2001,8 +2114,10 @@ function orientationMapMarkup() {
         <desc id="orientationMapDesc">A simplified city map with the start station and destination station.</desc>
         <rect class="map-bg" width="${CITY_MAP.width}" height="${CITY_MAP.height}" rx="6"></rect>
         ${CITY_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
-        <path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>
+        ${CITY_MAP.airport ? `<path class="map-airport" d="${mapCurvePath(CITY_MAP.airport, true)}"></path>` : ""}
+        ${CITY_MAP.outline.length ? `<path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>` : ""}
         <path class="waterway" d="${mapCurvePath(CITY_MAP.waterway)}"></path>
+        ${[...(CITY_MAP.labels || []), ...landmarkLabels].map(mapLabelMarkup).join("")}
         ${mapMarker(puzzle.start, "Start", "start-marker")}
         ${mapMarker(puzzle.end, "End", "end-marker")}
         ${current}
@@ -2247,9 +2362,9 @@ function renderLineStep(message = "") {
                   const transferLabel = hasNearbyBoard ? "Board here or nearby" : "";
                   return `
                     <button class="choice line-choice" data-line-index="${index}">
-                      ${lineBadge(option.routeId)}
+                      ${lineChoiceMarker(option.routeId)}
                       <span>
-                        <strong>${escapeHtml(modeName(r.mode))} ${escapeHtml(r.label)}</strong>
+                        <strong>${escapeHtml(routeChoiceLabel(r))}</strong>
                         ${transferLabel ? `<small>${escapeHtml(transferLabel)}</small>` : ""}
                       </span>
                     </button>
@@ -2307,41 +2422,35 @@ function renderDirectionStep() {
   const selected = state.selected;
   const r = route(selected.routeId);
   const directionOptions = [];
-  const bestByLabel = new Map();
+  const groupedByLabel = new Map();
   selected.boards.forEach((board) => {
     board.directionIds.forEach((dirId) => {
-      const label = direction(dirId).label;
+      const label = directionGroupLabel(direction(dirId).label);
       const candidate = { dirId, boardStation: board.boardStation, walkSec: board.walkSec, label };
-      const existing = bestByLabel.get(label);
-      if (
-        !existing ||
-        candidate.walkSec < existing.walkSec ||
-        (candidate.walkSec === existing.walkSec && compareText(station(candidate.boardStation).name, station(existing.boardStation).name) < 0)
-      ) {
-        bestByLabel.set(label, candidate);
-      }
+      if (!groupedByLabel.has(label)) groupedByLabel.set(label, { label, candidates: [] });
+      groupedByLabel.get(label).candidates.push(candidate);
     });
   });
-  directionOptions.push(...bestByLabel.values());
+  directionOptions.push(...groupedByLabel.values());
   directionOptions.sort((a, b) => compareText(a.label, b.label));
   boardShell(`
     <div class="step-title">
       <h2>Choose direction</h2>
-      <span>${escapeHtml(modeName(r.mode))} ${escapeHtml(r.label)}</span>
+      <span>${escapeHtml(routeChoiceLabel(r))}</span>
     </div>
     <div class="choice-grid">
       ${directionOptions
         .map((option, index) => {
-          const dir = direction(option.dirId);
+          const candidate = option.candidates[0];
           const directionLabel =
-            option.boardStation === state.currentStation
+            candidate.boardStation === state.currentStation
               ? state.steps.length
                 ? ""
                 : "Board here"
-              : `After ${formatCompactTime(option.walkSec)} walk from ${escapeHtml(station(state.currentStation).name)}`;
+              : `After ${formatCompactTime(candidate.walkSec)} walk from ${escapeHtml(station(state.currentStation).name)}`;
           return `
             <button class="choice" data-direction-index="${index}">
-              <strong>${escapeHtml(dir.label)}</strong>
+              <strong>${escapeHtml(option.label)}</strong>
               ${directionLabel ? `<small>${directionLabel}</small>` : ""}
             </button>
           `;
@@ -2353,8 +2462,9 @@ function renderDirectionStep() {
   document.querySelectorAll("[data-direction-index]").forEach((button) => {
     button.addEventListener("click", () => {
       const option = directionOptions[Number(button.dataset.directionIndex)];
-      state.selected.directionId = option.dirId;
-      state.selected.boardStation = option.boardStation;
+      state.selected.directionCandidates = option.candidates;
+      state.selected.directionId = option.candidates[0].dirId;
+      state.selected.boardStation = option.candidates[0].boardStation;
       renderAlightStep();
     });
   });
@@ -2365,17 +2475,33 @@ function renderDirectionStep() {
 function renderAlightStep() {
   state.stage = "alight";
   const selected = state.selected;
+  const directionCandidates = selected.directionCandidates || [{
+    dirId: selected.directionId,
+    boardStation: selected.boardStation,
+    walkSec: 0,
+    label: direction(selected.directionId).label,
+  }];
+  const choiceMap = new Map();
+  directionCandidates.forEach((candidate) => {
+    const candidateDir = direction(candidate.dirId);
+    const boardIndex = candidateDir.stations.indexOf(candidate.boardStation);
+    const downstream = candidateDir.stations.slice(boardIndex + 1);
+    const continuation = routeContinuation(candidate.dirId);
+    if (continuation && candidateDir.stations[candidateDir.stations.length - 1] === continuation.stationId) {
+      downstream.push(...direction(continuation.toDirectionId).stations.slice(1));
+    }
+    downstream.forEach((stationId) => {
+      const runSec = runtimeBetween(candidate.dirId, candidate.boardStation, stationId);
+      const existing = choiceMap.get(stationId);
+      if (!existing || runSec < existing.runSec) choiceMap.set(stationId, { stationId, runSec, ...candidate });
+    });
+  });
+  const choices = [...choiceMap.values()];
   const dir = direction(selected.directionId);
-  const boardIndex = dir.stations.indexOf(selected.boardStation);
-  const choices = dir.stations.slice(boardIndex + 1);
-  const continuation = routeContinuation(selected.directionId);
-  if (continuation && dir.stations[dir.stations.length - 1] === continuation.stationId) {
-    const nextDir = direction(continuation.toDirectionId);
-    choices.push(...nextDir.stations.slice(1));
-  }
   const r = route(selected.routeId);
-  const transferSignal = (stationId) => {
-    const runSec = runtimeBetween(selected.directionId, selected.boardStation, stationId);
+  const transferSignal = (choice) => {
+    const stationId = choice.stationId;
+    const runSec = choice.runSec;
     const services = station(stationId).services || {};
     const transferBadges = Object.keys(services)
       .filter((routeId) => routeId !== selected.routeId && route(routeId))
@@ -2396,12 +2522,12 @@ function renderAlightStep() {
     <div class="stop-strip" aria-label="${escapeHtml(r.label)} stops toward ${escapeHtml(dir.label)}">
       ${choices
         .map(
-          (stationId) => `
-            <button class="choice stop-choice${sameStation(stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(stationId)}">
+          (choice) => `
+            <button class="choice stop-choice${sameStation(choice.stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(choice.stationId)}" data-direction-id="${escapeHtml(choice.dirId)}" data-board-station="${escapeHtml(choice.boardStation)}">
               <span class="stop-node" aria-hidden="true"></span>
               <span class="stop-main">
-                <strong>${escapeHtml(station(stationId).name)}</strong>
-                ${transferSignal(stationId)}
+                <strong>${escapeHtml(station(choice.stationId).name)}</strong>
+                ${transferSignal(choice)}
               </span>
             </button>
           `,
@@ -2412,7 +2538,11 @@ function renderAlightStep() {
     </div>
   `);
   document.querySelectorAll("[data-alight]").forEach((button) => {
-    button.addEventListener("click", () => addLeg(button.dataset.alight));
+    button.addEventListener("click", () => {
+      state.selected.directionId = button.dataset.directionId;
+      state.selected.boardStation = button.dataset.boardStation;
+      addLeg(button.dataset.alight);
+    });
   });
   $("#backToDirections").addEventListener("click", renderDirectionStep);
   bindPuzzleToolbar();
@@ -2907,13 +3037,35 @@ function showLoadingState() {
   $("#game").innerHTML = `<section class="summary"><p class="muted">Loading today's route...</p></section>`;
 }
 
+function updateCityChrome() {
+  const city = state.data.metadata.city;
+  $("#citySelector").value = CITY_ID;
+  $("#cityKicker").textContent = `${city.name} daily route puzzle`;
+  $("#cityDisclaimer").textContent = city.attribution.disclaimer;
+  document.title = `Chronométro — ${city.name}`;
+  document.documentElement.dataset.city = CITY_ID;
+}
+
+function bindCitySelector() {
+  $("#citySelector").value = CITY_ID;
+  $("#citySelector").addEventListener("change", (event) => {
+    const url = new URL(window.location.href);
+    if (event.target.value === "paris") url.searchParams.delete("city");
+    else url.searchParams.set("city", event.target.value);
+    window.location.assign(url);
+  });
+}
+
 async function init() {
   showLoadingState();
+  bindCitySelector();
   $("#homeButton").addEventListener("click", () => {
     if (state.data) restartDay();
   });
   state.data = await fetchJson(NETWORK_URL);
   if (!state.data) throw new Error("Network load failed");
+  configureCityMap();
+  updateCityChrome();
   const today = cityDateString();
   const puzzleSet = await loadPuzzleSet(today);
   state.daily = puzzleSet.puzzles;

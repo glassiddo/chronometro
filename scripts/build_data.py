@@ -1680,7 +1680,43 @@ def write_example(pairs: list[dict], count: int) -> None:
     log(f"wrote {EXAMPLE_OUT} ({file_size_mb(EXAMPLE_OUT):.2f} MB)")
 
 
+def daily_eligible_pairs(pairs: list[dict]) -> list[dict]:
+    """Apply preview-only endpoint constraints without rebuilding the candidate pool."""
+    if not CITY_CONFIG["puzzles"].get("requireInterchangeEndpoints", False):
+        return pairs
+    network = json.loads(NETWORK_OUT.read_text(encoding="utf-8"))
+    stations = network["stations"]
+    transfers = network.get("transfers", {})
+
+    def connected_route_ids(station_id: str) -> set[str]:
+        connected_ids = {station_id, *transfers.get(station_id, {}).keys()}
+        connected_ids.update(
+            source_id
+            for source_id, destinations in transfers.items()
+            if station_id in destinations
+        )
+        return {
+            route_id
+            for connected_id in connected_ids
+            for route_id in stations.get(connected_id, {}).get("services", {})
+        }
+
+    interchange_ids = {
+        station_id for station_id in stations if len(connected_route_ids(station_id)) >= 2
+    }
+    eligible = [
+        pair for pair in pairs
+        if pair.get("start") in interchange_ids and pair.get("end") in interchange_ids
+    ]
+    log(
+        f"daily interchange endpoint filter: {len(eligible):,} of {len(pairs):,} candidate pairs "
+        f"across {len(interchange_ids):,} eligible stations"
+    )
+    return eligible
+
+
 def write_daily_range(pairs: list[dict], start_date: str, days: int, count: int) -> None:
+    pairs = daily_eligible_pairs(pairs)
     start = date.fromisoformat(start_date)
     dates = []
     for offset in range(days):

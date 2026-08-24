@@ -51,6 +51,7 @@
     "boundedEndpointModes": ["elizabeth"],
     "bounds": {"minLat": 51.35, "maxLat": 51.65, "minLon": -0.52, "maxLon": 0.25},
     "excludeSameComplexEndpoints": true,
+    "requireInterchangeEndpoints": true,
     "seedNamespace": "chronometro-london"
   },
   "paths": {
