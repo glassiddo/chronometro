@@ -1,5 +1,8 @@
 gouv_paris_gtfs-export/
+gouv_london_tfl-export/
 scripts/__pycache__/
 *.pyc
 public/data/generated/
+public/data/*/generated/
 public/data/metro-express-data.json
+.env.local

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "id": "london",
+  "name": "London",
+  "gameTitle": "Chronométro",
+  "networkTitle": "London transit network",
+  "timezone": "Europe/London",
+  "locale": "en-GB",
+  "source": {
+    "type": "tfl-unified-api",
+    "directory": "gouv_london_tfl-export",
+    "adapter": "london",
+    "publisher": "Transport for London Unified API"
+  },
+  "attribution": {
+    "display": "Transport for London",
+    "disclaimer": "Data provided by Transport for London. Chronométro is not affiliated with or endorsed by Transport for London."
+  },
+  "modes": {
+    "tube": {"label": "Tube", "defaultWaitSeconds": 120, "maximumWaitSeconds": 360},
+    "elizabeth": {"label": "Elizabeth line", "defaultWaitSeconds": 150, "maximumWaitSeconds": 600}
+  },
+  "timing": {
+    "peakStartSeconds": 25200,
+    "peakEndSeconds": 36000,
+    "minimumWaitSeconds": 30,
+    "transferDefaultsSeconds": {
+      "same_mode": 120,
+      "elizabeth_tube": 240,
+      "fallback": 180
+    },
+    "hubTransferSeconds": 180,
+    "stationEquivalenceDistanceMetres": 150,
+    "stationEquivalenceTransferSeconds": 120
+  },
+  "network": {
+    "maximumDirectionsPerRoute": 24,
+    "shortTurnModes": [],
+    "allowSameRouteStartWalk": true,
+    "routeContinuations": [],
+    "skippedStopsByLine": {"metropolitan": ["940GZZLUWIG"]}
+  },
+  "puzzles": {
+    "startDate": "2026-08-25",
+    "days": 365,
+    "dailyCount": 5,
+    "exampleCount": 100,
+    "minimumRouteDistanceMetres": 2500,
+    "minimumEndpointDistanceMetres": 2000,
+    "endpointModes": ["tube"],
+    "boundedEndpointModes": ["elizabeth"],
+    "bounds": {"minLat": 51.35, "maxLat": 51.65, "minLon": -0.52, "maxLon": 0.25},
+    "excludeSameComplexEndpoints": true,
+    "seedNamespace": "chronometro-london"
+  },
+  "paths": {
+    "network": "public/data/london/network.json",
+    "allPairs": "public/data/london/generated/all-pairs.json",
+    "example": "public/data/london/example/puzzles.json",
+    "daily": "public/data/london/daily"
+  },
+  "legacyPaths": {}
+}

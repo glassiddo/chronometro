@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "id": "paris",
+  "name": "Paris",
+  "gameTitle": "Chronométro",
+  "networkTitle": "MÃ©tro Express",
+  "timezone": "Europe/Paris",
+  "locale": "fr",
+  "source": {
+    "type": "gtfs",
+    "directory": "gouv_paris_gtfs-export",
+    "adapter": "paris",
+    "publisher": "ITO World modified GTFS export derived from Ile-de-France Mobilites",
+    "fallbackVersion": "20260630_200738",
+    "fallbackValidFrom": "2026-06-27",
+    "fallbackValidTo": "2026-07-29"
+  },
+  "attribution": {
+    "display": "Île-de-France Mobilités / ITO World GTFS export",
+    "disclaimer": "Chronométro is not affiliated with or endorsed by RATP or Île-de-France Mobilités."
+  },
+  "modes": {
+    "metro": {"label": "Metro", "defaultWaitSeconds": 120, "maximumWaitSeconds": 240},
+    "rer": {"label": "RER", "defaultWaitSeconds": 240, "maximumWaitSeconds": 600},
+    "tram": {"label": "Tram", "defaultWaitSeconds": 240, "maximumWaitSeconds": 600},
+    "bus": {"label": "Bus", "defaultWaitSeconds": 300, "maximumWaitSeconds": 600, "enabled": false}
+  },
+  "timing": {
+    "peakStartSeconds": 25200,
+    "peakEndSeconds": 36000,
+    "minimumWaitSeconds": 30,
+    "transferDefaultsSeconds": {
+      "same_mode": 180,
+      "metro_rer": 360,
+      "metro_tram": 240,
+      "rer_tram": 360,
+      "fallback": 300
+    },
+    "stationEquivalenceDistanceMetres": 150,
+    "stationEquivalenceTransferSeconds": 120
+  },
+  "network": {
+    "maximumDirectionsPerRoute": 18,
+    "shortTurnModes": ["rer"],
+    "routeContinuations": [{"routeId": "8567", "stationId": "PARIS166100"}]
+  },
+  "puzzles": {
+    "startDate": "2026-07-28",
+    "days": 365,
+    "dailyCount": 5,
+    "exampleCount": 100,
+    "minimumRouteDistanceMetres": 1000,
+    "minimumEndpointDistanceMetres": 1500,
+    "endpointModes": ["metro"],
+    "boundedEndpointModes": ["rer"],
+    "bounds": {"minLat": 48.815, "maxLat": 48.902, "minLon": 2.25, "maxLon": 2.42},
+    "seedNamespace": "metro-express"
+  },
+  "paths": {
+    "network": "public/data/paris/network.json",
+    "allPairs": "public/data/paris/generated/all-pairs.json",
+    "example": "public/data/paris/example/puzzles.json",
+    "daily": "public/data/paris/daily"
+  },
+  "legacyPaths": {
+    "network": "public/data/metro-express-network.json",
+    "example": "public/data/example/metro-express-example-data.json",
+    "daily": "public/data/daily"
+  }
+}

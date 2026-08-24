@@ -4,6 +4,12 @@
 /data/metro-express-network.json
   Cache-Control: public, max-age=86400
 
+/data/*/network.json
+  Cache-Control: public, max-age=86400
+
+/data/*/daily/*.json
+  Cache-Control: public, max-age=31536000, immutable
+
 /app.js
   Cache-Control: public, max-age=300
 

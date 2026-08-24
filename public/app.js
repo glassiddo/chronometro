@@ -1,7 +1,9 @@
-const NETWORK_URL = "./data/metro-express-network.json";
-const DAILY_INDEX_URL = "./data/daily/index.json";
-const DAILY_BASE_URL = "./data/daily";
-const EXAMPLE_URL = "./data/example/metro-express-example-data.json";
+const CITY_ID = "paris";
+const CITY_DATA_URL = `./data/${CITY_ID}`;
+const NETWORK_URL = `${CITY_DATA_URL}/network.json`;
+const DAILY_INDEX_URL = `${CITY_DATA_URL}/daily/index.json`;
+const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
+const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
 
@@ -42,7 +44,7 @@ function direction(id) {
 }
 
 function modeName(mode) {
-  return { metro: "Metro", rer: "RER", tram: "Tram", bus: "Bus" }[mode] || mode;
+  return state.data?.metadata?.modes?.[mode]?.label || mode;
 }
 
 function compareText(left, right) {
@@ -105,9 +107,9 @@ function stepType(step) {
   return step.type || "ride";
 }
 
-function parisDateString(date = new Date()) {
+function cityDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Paris",
+    timeZone: state.data?.metadata?.city?.timezone || "UTC",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -154,7 +156,7 @@ function escapeHtml(value) {
 }
 
 function setRoundLabel() {
-  $("#todayLabel").textContent = state.dailyDate || parisDateString();
+  $("#todayLabel").textContent = state.dailyDate || cityDateString();
   $("#roundLabel").textContent =
     state.stage === "summary" ? "Done" : `${state.puzzleIndex + 1} / ${puzzleCount()}`;
 }
@@ -221,7 +223,7 @@ function stationLineBadges(stationId) {
   return badges ? `<span class="station-lines" aria-label="Connecting lines">${badges}</span>` : "";
 }
 
-const PARIS_MAP = {
+const CITY_MAP = {
   "width": 320,
   "height": 220,
   "bounds": {
@@ -1870,7 +1872,7 @@ const PARIS_MAP = {
       ]
     ]
   ],
-  "seine": [
+  "waterway": [
     [
       2.224,
       48.842
@@ -1939,7 +1941,7 @@ const PARIS_MAP = {
 };
 
 function mapPoint({ lat, lon }) {
-  const { bounds, width, height } = PARIS_MAP;
+  const { bounds, width, height } = CITY_MAP;
   const pad = 12;
   const x = pad + ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * (width - pad * 2);
   const y = pad + ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * (height - pad * 2);
@@ -1993,14 +1995,14 @@ function orientationMapMarkup() {
       ? mapMarker(state.currentStation, "Current", "current-marker")
       : "";
   return `
-    <figure class="orientation-map" aria-label="Paris orientation map showing start and destination stations">
-      <svg viewBox="0 0 ${PARIS_MAP.width} ${PARIS_MAP.height}" role="img" aria-labelledby="orientationMapTitle orientationMapDesc">
-        <title id="orientationMapTitle">Paris orientation map</title>
-        <desc id="orientationMapDesc">A simplified map of Paris with the Seine, the start station, and the destination station.</desc>
-        <rect class="map-bg" width="${PARIS_MAP.width}" height="${PARIS_MAP.height}" rx="6"></rect>
-        ${PARIS_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
-        <path class="paris-outline" d="${mapCurvePath(PARIS_MAP.outline, true)}"></path>
-        <path class="seine" d="${mapCurvePath(PARIS_MAP.seine)}"></path>
+    <figure class="orientation-map" aria-label="${escapeHtml(state.data.metadata.city.name)} orientation map showing start and destination stations">
+      <svg viewBox="0 0 ${CITY_MAP.width} ${CITY_MAP.height}" role="img" aria-labelledby="orientationMapTitle orientationMapDesc">
+        <title id="orientationMapTitle">${escapeHtml(state.data.metadata.city.name)} orientation map</title>
+        <desc id="orientationMapDesc">A simplified city map with the start station and destination station.</desc>
+        <rect class="map-bg" width="${CITY_MAP.width}" height="${CITY_MAP.height}" rx="6"></rect>
+        ${CITY_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
+        <path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>
+        <path class="waterway" d="${mapCurvePath(CITY_MAP.waterway)}"></path>
         ${mapMarker(puzzle.start, "Start", "start-marker")}
         ${mapMarker(puzzle.end, "End", "end-marker")}
         ${current}
@@ -2061,10 +2063,8 @@ function boardShell(content, { showRouteSummary = true } = {}) {
 function transferFallback(fromMode, toMode) {
   const defaults = state.data.metadata.transferFallbackSeconds;
   if (fromMode === toMode) return defaults.same_mode;
-  const pair = new Set([fromMode, toMode]);
-  if (pair.has("metro") && pair.has("rer")) return defaults.metro_rer;
-  if (pair.has("metro") && pair.has("tram")) return defaults.metro_tram;
-  if (pair.has("rer") && pair.has("tram")) return defaults.rer_tram;
+  const pairKey = [fromMode, toMode].sort().join("_");
+  if (Number.isFinite(defaults[pairKey])) return defaults[pairKey];
   return defaults.fallback;
 }
 
@@ -2761,7 +2761,7 @@ function shareScores() {
 }
 
 function shareText(total) {
-  return `chronometro.cc ${state.dailyDate || parisDateString()}\n${total}/${puzzleCount() * 100}\nScores: ${shareScores()}`;
+  return `chronometro.cc ${state.dailyDate || cityDateString()}\n${total}/${puzzleCount() * 100}\nScores: ${shareScores()}`;
 }
 
 async function copyText(text) {
@@ -2804,7 +2804,7 @@ function renderSummary() {
         <button class="action secondary" id="restartDay">Replay today</button>
         <span class="copy-status" id="copyStatus" role="status" aria-live="polite"></span>
       </div>
-      <p class="source-note">Route data: Île-de-France Mobilités / ITO World GTFS export.</p>
+      <p class="source-note">Route data: ${escapeHtml(state.data.metadata.city.attribution.display)}.</p>
     </section>
   `;
   $("#copyResults").addEventListener("click", async () => {
@@ -2887,7 +2887,7 @@ async function loadExamplePuzzleSet(today) {
   throw new Error("Puzzle load failed");
 }
 
-async function loadPuzzleSet(today = parisDateString()) {
+async function loadPuzzleSet(today = cityDateString()) {
   const todayData = await fetchJson(`${DAILY_BASE_URL}/${today}.json`);
   const todayPuzzleSet = puzzleSetFromDailyData(todayData, today);
   if (todayPuzzleSet) return todayPuzzleSet;
@@ -2912,10 +2912,10 @@ async function init() {
   $("#homeButton").addEventListener("click", () => {
     if (state.data) restartDay();
   });
-  const today = parisDateString();
-  const [networkData, puzzleSet] = await Promise.all([fetchJson(NETWORK_URL), loadPuzzleSet(today)]);
-  state.data = networkData;
+  state.data = await fetchJson(NETWORK_URL);
   if (!state.data) throw new Error("Network load failed");
+  const today = cityDateString();
+  const puzzleSet = await loadPuzzleSet(today);
   state.daily = puzzleSet.puzzles;
   state.dailyDate = puzzleSet.date;
   state.dailyKind = puzzleSet.kind;

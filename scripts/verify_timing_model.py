@@ -6,18 +6,39 @@ from __future__ import annotations
 import json
 import math
 import importlib.util
+import argparse
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NETWORK = ROOT / "public" / "data" / "metro-express-network.json"
-DAILY_INDEX = ROOT / "public" / "data" / "daily" / "index.json"
-DAILY_DIR = ROOT / "public" / "data" / "daily"
 APP = ROOT / "public" / "app.js"
 BUILD = ROOT / "scripts" / "build_data.py"
+CITY_ID = "paris"
+CITY_CONFIG: dict = {}
+NETWORK = Path()
+DAILY_INDEX = Path()
+DAILY_DIR = Path()
 DAILY_PUZZLE_COUNT = 5
 MIN_PUZZLE_ROUTE_DISTANCE_M = 1000
 MIN_PUZZLE_ENDPOINT_DISTANCE_M = 1500
+
+
+def configure_city(city_id: str) -> None:
+    global CITY_ID, CITY_CONFIG, NETWORK, DAILY_INDEX, DAILY_DIR
+    global DAILY_PUZZLE_COUNT, MIN_PUZZLE_ROUTE_DISTANCE_M, MIN_PUZZLE_ENDPOINT_DISTANCE_M
+    CITY_ID = city_id
+    path = ROOT / "config" / "cities" / f"{city_id}.json"
+    CITY_CONFIG = json.loads(path.read_text(encoding="utf-8"))
+    NETWORK = ROOT / CITY_CONFIG["paths"]["network"]
+    DAILY_DIR = ROOT / CITY_CONFIG["paths"]["daily"]
+    DAILY_INDEX = DAILY_DIR / "index.json"
+    puzzles = CITY_CONFIG["puzzles"]
+    DAILY_PUZZLE_COUNT = puzzles["dailyCount"]
+    MIN_PUZZLE_ROUTE_DISTANCE_M = puzzles["minimumRouteDistanceMetres"]
+    MIN_PUZZLE_ENDPOINT_DISTANCE_M = puzzles["minimumEndpointDistanceMetres"]
+
+
+configure_city(CITY_ID)
 
 
 def require(condition: bool, message: str) -> None:
@@ -281,17 +302,25 @@ def verify_route_continuations(data: dict) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Verify a configured Chronométro city bundle.")
+    parser.add_argument("city", nargs="?", default="paris")
+    args = parser.parse_args()
+    configure_city(args.city)
     data = load_current_daily_bundle()
+    require(data["metadata"].get("schemaVersion") == CITY_CONFIG["schemaVersion"], "schema version mismatch")
+    require(data["metadata"].get("city", {}).get("id") == CITY_ID, "network city metadata mismatch")
     verify_puzzle_pool_constraints(data)
     verify_optimal_breakdowns(data)
-    verify_auteuil_case_if_present(data)
-    verify_station_equivalents(data)
-    verify_route_continuations(data)
+    if CITY_ID == "paris":
+        verify_auteuil_case_if_present(data)
+        verify_station_equivalents(data)
+        verify_route_continuations(data)
 
-    chatelet = route_transfer(data, "PARIS208683", "PARIS208683", "8562", "15061")
-    daumesnil = route_transfer(data, "ITOAUTO79148", "ITOAUTO79148", "15093", "15215")
-    require(chatelet == 360, f"Chatelet Line 11 -> Line 4 should be 360s, got {chatelet!r}")
-    require(daumesnil == 180, f"Daumesnil Line 8 -> Line 6 should be 180s, got {daumesnil!r}")
+    chatelet = route_transfer(data, "PARIS208683", "PARIS208683", "8562", "15061") if CITY_ID == "paris" else None
+    daumesnil = route_transfer(data, "ITOAUTO79148", "ITOAUTO79148", "15093", "15215") if CITY_ID == "paris" else None
+    if CITY_ID == "paris":
+        require(chatelet == 360, f"Chatelet Line 11 -> Line 4 should be 360s, got {chatelet!r}")
+        require(daumesnil == 180, f"Daumesnil Line 8 -> Line 6 should be 180s, got {daumesnil!r}")
 
     metadata = data["metadata"]
     require(metadata.get("waitSecondsByDirection"), "missing direction-level waits")
@@ -302,7 +331,7 @@ def main() -> None:
     build = BUILD.read_text(encoding="utf-8")
     require("waitSecondsByDirection" in app and "waitSecondsByRoute" in app, "frontend does not use derived waits")
     require("routeTransfers" in app and "transferFallback" in app, "frontend does not use route transfer fallback rules")
-    require("routeTimingTotals" in app and "rideSec" in app, "frontend does not expose timing breakdowns")
+    require("formatLegBreakdown" in app and "rideSec" in app, "frontend does not expose timing breakdowns")
     require("function addWalkStep(" in app and "walk:" in app, "frontend does not expose explicit walk steps")
     require('"steps": steps' in build, "backend does not emit route steps")
     require("function canonicalStationId(" in app and "function sameStation(" in app, "frontend lacks canonical station helpers")
@@ -313,10 +342,11 @@ def main() -> None:
     require("self.route_transfers.get(" in build and "fallback_transfer" in build, "backend transfer fallback order changed")
     require('"rideSec": totals["rideSec"]' in build, "backend does not emit timing breakdowns")
 
-    print("timing model verification passed")
+    print(f"{CITY_ID} timing model verification passed")
     print(f"verified timing breakdowns for {len(data['puzzles'])} puzzles")
-    print(f"Chatelet Line 11 -> Line 4: {chatelet}s")
-    print(f"Daumesnil Line 8 -> Line 6: {daumesnil}s")
+    if CITY_ID == "paris":
+        print(f"Chatelet Line 11 -> Line 4: {chatelet}s")
+        print(f"Daumesnil Line 8 -> Line 6: {daumesnil}s")
     print(
         "wait tables:",
         f"{len(metadata['waitSecondsByDirection'])} directions,",
