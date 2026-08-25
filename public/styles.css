@@ -499,6 +499,10 @@ h1 {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.45;
+  opacity: .18;
+}
+
+.map-network-context--london {
   opacity: .38;
 }
 

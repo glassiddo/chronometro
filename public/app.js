@@ -2138,10 +2138,10 @@ function mapMarker(stationId, label, className) {
 }
 
 function networkContextMapMarkup() {
-  if (CITY_ID !== "london") return "";
   const seen = new Set();
   const segments = [];
   Object.values(state.data.directions).forEach((dir) => {
+    if (CITY_ID === "paris" && route(dir.routeId)?.mode !== "metro") return;
     dir.stations.slice(0, -1).forEach((leftId, index) => {
       const rightId = dir.stations[index + 1];
       const key = [leftId, rightId].sort().join(":");
@@ -2155,7 +2155,7 @@ function networkContextMapMarkup() {
       segments.push(`M ${from.x.toFixed(1)} ${from.y.toFixed(1)} L ${to.x.toFixed(1)} ${to.y.toFixed(1)}`);
     });
   });
-  return `<path class="map-network-context" d="${segments.join(" ")}"></path>`;
+  return `<path class="map-network-context map-network-context--${CITY_ID}" d="${segments.join(" ")}"></path>`;
 }
 
 function orientationMapMarkup() {
