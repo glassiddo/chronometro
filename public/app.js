@@ -43,6 +43,19 @@ function sameStation(leftId, rightId) {
   return canonicalStationId(leftId) === canonicalStationId(rightId);
 }
 
+function sameLondonHub(leftId, rightId) {
+  if (CITY_ID !== "london" || !leftId || !rightId) return false;
+  return (state.data?.stationEquivalents || []).some((group) => group.includes(leftId) && group.includes(rightId));
+}
+
+function samePuzzleStation(leftId, rightId) {
+  return sameStation(leftId, rightId) || sameLondonHub(leftId, rightId);
+}
+
+function isFreeStartHubBoarding(boardStationId) {
+  return state.steps.length === 0 && samePuzzleStation(state.currentStation, currentPuzzle().start) && samePuzzleStation(boardStationId, currentPuzzle().start);
+}
+
 function route(id) {
   return state.data.routes[id];
 }
@@ -164,7 +177,7 @@ function lineChoiceMarker(routeId) {
 function routeDisplayName(r) {
   const label = r?.label || "";
   if (CITY_ID !== "london") return label;
-  if (label === "Hammersmith & City") return "H&C";
+  if (label === "Hammersmith & City") return "H & C";
   return label.replace(/\s+line$/i, "");
 }
 
@@ -174,7 +187,7 @@ function routeChoiceLabel(r) {
 
 function directionGroupLabel(label) {
   if (CITY_ID === "london" && /^Heathrow Terminal [45]$/i.test(label)) return "Heathrow";
-  return label;
+  return CITY_ID === "london" ? label.replace(/\s+\((?:Circle|H\s*&\s*C) Line\)$/i, "") : label;
 }
 
 function escapeHtml(value) {
@@ -223,7 +236,7 @@ function renderRouteList(steps, { showDirection = true, showDetail = true, showE
           ${lineBadge(step.routeId)}
           <p>
             <strong>${escapeHtml(stationDisplayName(step.from))} → ${escapeHtml(stationDisplayName(step.to))}</strong>
-            ${showDirection ? `<small>Direction ${escapeHtml(direction(step.directionId).label)}</small>` : ""}
+            ${showDirection ? `<small>Direction ${escapeHtml(directionGroupLabel(direction(step.directionId).label))}</small>` : ""}
             ${detail ? `<small class="leg-detail">${escapeHtml(detail)}</small>` : ""}
           </p>
           ${elapsed}
@@ -267,13 +280,11 @@ function stationInterchangeRouteIds(stationId) {
 function stationLineBadges(stationId) {
   const badges = stationLineIds(stationId).map(lineBadge).join("");
   if (CITY_ID !== "london") return badges ? `<span class="station-lines" aria-label="Connecting lines">${badges}</span>` : "";
-  const ownRouteIds = new Set(stationLineIds(stationId));
-  const sortedConnectedRouteIds = stationInterchangeRouteIds(stationId);
-  const connectionMarkup = sortedConnectedRouteIds.length
-    ? `<span class="station-connection"><small>Interchange</small><span class="station-lines">${sortedConnectedRouteIds.map(lineBadge).join("")}</span></span>`
+  const allRouteIds = new Set([...stationLineIds(stationId), ...stationInterchangeRouteIds(stationId)]);
+  const sortedRouteIds = [...allRouteIds].sort((a, b) => compareText(routeDisplayName(route(a)), routeDisplayName(route(b))));
+  return sortedRouteIds.length
+    ? `<span class="station-lines" aria-label="Lines at this station hub">${sortedRouteIds.map(lineBadge).join("")}</span>`
     : "";
-  const serviceLabel = ownRouteIds.size > 1 && connectionMarkup ? `<span class="station-service-label">At this station</span>` : "";
-  return `${badges ? `${serviceLabel}<span class="station-lines" aria-label="Lines at this station">${badges}</span>` : ""}${connectionMarkup}`;
 }
 
 const PARIS_MAP = {
@@ -2101,7 +2112,7 @@ function orientationMapMarkup() {
   const puzzle = currentPuzzle();
   fitLondonMapToPuzzle();
   const current =
-    state.currentStation && !sameStation(state.currentStation, puzzle.start) && !sameStation(state.currentStation, puzzle.end)
+    state.currentStation && !samePuzzleStation(state.currentStation, puzzle.start) && !samePuzzleStation(state.currentStation, puzzle.end)
       ? mapMarker(state.currentStation, "Current", "current-marker")
       : "";
   return `
@@ -2365,14 +2376,11 @@ function renderLineStep(message = "") {
               ${options
                 .map((option, index) => {
                   const r = route(option.routeId);
-                  const hasNearbyBoard = option.boards.some((board) => board.boardStation !== state.currentStation);
-                  const transferLabel = hasNearbyBoard ? "Board here" : "";
                   return `
                     <button class="choice line-choice" data-line-index="${index}">
                       ${lineChoiceMarker(option.routeId)}
                       <span>
                         <strong>${escapeHtml(routeChoiceLabel(r))}</strong>
-                        ${transferLabel ? `<small>${escapeHtml(transferLabel)}</small>` : ""}
                       </span>
                     </button>
                   `;
@@ -2449,12 +2457,9 @@ function renderDirectionStep() {
       ${directionOptions
         .map((option, index) => {
           const candidate = option.candidates[0];
-          const directionLabel =
-            candidate.boardStation === state.currentStation
-              ? state.steps.length
-                ? ""
-                : "Board here"
-              : `After ${formatCompactTime(candidate.walkSec)} walk from ${escapeHtml(stationDisplayName(state.currentStation))}`;
+          const directionLabel = candidate.boardStation === state.currentStation || isFreeStartHubBoarding(candidate.boardStation)
+            ? ""
+            : `${formatCompactTime(candidate.walkSec)} walk`;
           return `
             <button class="choice" data-direction-index="${index}">
               <strong>${escapeHtml(option.label)}</strong>
@@ -2527,13 +2532,13 @@ function renderAlightStep() {
     <div class="stop-selection">
     <div class="step-title">
       <h2>Choose your stop</h2>
-      <span>${escapeHtml(routeDisplayName(r))} toward ${escapeHtml(dir.label)}</span>
+      <span>${escapeHtml(routeDisplayName(r))} toward ${escapeHtml(directionGroupLabel(dir.label))}</span>
     </div>
-    <div class="stop-strip" aria-label="${escapeHtml(routeDisplayName(r))} stops toward ${escapeHtml(dir.label)}">
+    <div class="stop-strip" aria-label="${escapeHtml(routeDisplayName(r))} stops toward ${escapeHtml(directionGroupLabel(dir.label))}">
       ${choices
         .map(
           (choice) => `
-            <button class="choice stop-choice${sameStation(choice.stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(choice.stationId)}" data-direction-id="${escapeHtml(choice.dirId)}" data-board-station="${escapeHtml(choice.boardStation)}">
+            <button class="choice stop-choice${samePuzzleStation(choice.stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(choice.stationId)}" data-direction-id="${escapeHtml(choice.dirId)}" data-board-station="${escapeHtml(choice.boardStation)}">
               <span class="stop-node" aria-hidden="true"></span>
               <span class="stop-main">
                 <strong>${escapeHtml(stationDisplayName(choice.stationId))}</strong>
@@ -2639,7 +2644,7 @@ function addWalkStep(toStation, nextRouteId = null, { renderAfter = true } = {})
   state.currentStation = toStation;
   state.selected = {};
   if (!renderAfter) return true;
-  if (sameStation(toStation, currentPuzzle().end)) {
+  if (samePuzzleStation(toStation, currentPuzzle().end)) {
     renderResult();
   } else {
     renderLineStep();
@@ -2661,7 +2666,7 @@ function addLeg(toStation) {
     return;
   }
 
-  if (selected.boardStation !== state.currentStation) {
+  if (selected.boardStation !== state.currentStation && !isFreeStartHubBoarding(selected.boardStation)) {
     const walked = addWalkStep(selected.boardStation, selected.routeId, { renderAfter: false });
     if (!walked) return;
   }
@@ -2680,7 +2685,7 @@ function addLeg(toStation) {
   state.currentStation = toStation;
   state.selected = {};
 
-  if (sameStation(toStation, currentPuzzle().end)) {
+  if (samePuzzleStation(toStation, currentPuzzle().end)) {
     renderResult();
   } else {
     renderLineStep();
@@ -2748,7 +2753,7 @@ function scoreRoute(puzzle, signature, totalSec, steps = []) {
   const deltaSec = Math.max(0, comparableTotalSec - optimal.totalSec);
   const deltaMin = deltaSec / 60;
   const slowPct = (deltaSec / optimal.totalSec) * 100;
-  const rawScore = 100 - deltaMin * 3 - slowPct * 0.6;
+  const rawScore = 100 - deltaMin - slowPct * 0.8;
   const score = Math.max(10, Math.min(99, Math.round(rawScore)));
 
   if (score >= 90) return { score, label: "Excellent route" };
@@ -3054,6 +3059,12 @@ function updateCityChrome() {
   $("#cityDisclaimer").textContent = city.attribution.disclaimer;
   document.title = `Chronométro — ${city.name}`;
   document.documentElement.dataset.city = CITY_ID;
+  document.querySelectorAll(".site-footer nav a").forEach((link) => {
+    const url = new URL(link.href);
+    if (CITY_ID === "london") url.searchParams.set("city", "london");
+    else url.searchParams.delete("city");
+    link.href = url;
+  });
 }
 
 function bindCitySelector() {

@@ -78,7 +78,12 @@ def canonical_station_id(data: dict, station_id: str) -> str:
 
 
 def same_station(data: dict, left_id: str, right_id: str) -> bool:
-    return canonical_station_id(data, left_id) == canonical_station_id(data, right_id)
+    if canonical_station_id(data, left_id) == canonical_station_id(data, right_id):
+        return True
+    return any(
+        left_id in group and right_id in group
+        for group in data.get("stationEquivalents", [])
+    )
 
 
 def station_distance_m(left: dict, right: dict) -> float:
@@ -179,7 +184,10 @@ def verify_optimal_breakdowns(data: dict) -> None:
                 optimal[key] == step_total,
                 f"{puzzle['id']} {key} step mismatch: {optimal[key]} != {step_total}",
             )
-        require(steps[0]["from"] == puzzle["start"], f"{puzzle['id']} first step does not start at puzzle start")
+        require(
+            same_station(data, steps[0]["from"], puzzle["start"]),
+            f"{puzzle['id']} first step does not start at puzzle start or equivalent platform",
+        )
         require(
             steps[-1]["to"] == puzzle["end"] or same_station(data, steps[-1]["to"], puzzle["end"]),
             f"{puzzle['id']} last step does not end at destination or equivalent station",
@@ -191,7 +199,7 @@ def verify_optimal_breakdowns(data: dict) -> None:
             )
         first_ride = next((step for step in steps if step.get("type", "ride") == "ride"), None)
         require(first_ride is not None, f"{puzzle['id']} has no ride step")
-        if first_ride["from"] != puzzle["start"]:
+        if not same_station(data, first_ride["from"], puzzle["start"]):
             require(
                 steps[0].get("type") == "walk" and steps[0]["to"] == first_ride["from"],
                 f"{puzzle['id']} first ride starts away from puzzle start without explicit walk",
@@ -335,9 +343,14 @@ def main() -> None:
     require("function addWalkStep(" in app and "walk:" in app, "frontend does not expose explicit walk steps")
     require('"steps": steps' in build, "backend does not emit route steps")
     require("function canonicalStationId(" in app and "function sameStation(" in app, "frontend lacks canonical station helpers")
-    require("sameStation(toStation, currentPuzzle().end)" in app, "frontend completion still uses raw station ids")
     require(
-        "sameStation(choice.stationId, currentPuzzle().end)" in app
+        "samePuzzleStation(toStation, currentPuzzle().end)" in app
+        or "sameStation(toStation, currentPuzzle().end)" in app,
+        "frontend completion still uses raw station ids",
+    )
+    require(
+        "samePuzzleStation(choice.stationId, currentPuzzle().end)" in app
+        or "sameStation(choice.stationId, currentPuzzle().end)" in app
         or "sameStation(stationId, currentPuzzle().end)" in app,
         "frontend destination labels still use raw station ids",
     )

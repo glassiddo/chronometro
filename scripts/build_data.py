@@ -8,6 +8,7 @@ city settings live in ``config/cities/<city>.json``.
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import heapq
 import importlib
@@ -1715,6 +1716,46 @@ def daily_eligible_pairs(pairs: list[dict]) -> list[dict]:
     return eligible
 
 
+def optimize_daily_endpoint_hubs(selected: list[dict]) -> list[dict]:
+    """Let London puzzles start and finish on any platform in the named hub."""
+    if CITY_ID != "london":
+        return selected
+    network = json.loads(NETWORK_OUT.read_text(encoding="utf-8"))
+    hub_by_station = {
+        station_id: group
+        for group in network.get("stationEquivalents", [])
+        for station_id in group
+    }
+    metadata = network["metadata"]
+    router = Router(
+        network["stations"],
+        network["routes"],
+        network["directions"],
+        network.get("transfers", {}),
+        network.get("routeTransfers", {}),
+        metadata.get("waitSecondsByDirection", {}),
+        metadata.get("waitSecondsByRoute", {}),
+        network.get("canonicalStationIds", {}),
+    )
+    optimized = []
+    for original in selected:
+        pair = copy.deepcopy(original)
+        best = None
+        for start_id in hub_by_station.get(pair["start"], [pair["start"]]):
+            for end_id in hub_by_station.get(pair["end"], [pair["end"]]):
+                path = router.fastest_path(start_id, end_id)
+                if path is None:
+                    continue
+                described = router.describe_path(*path, start_station=start_id, end_station=end_id)
+                if described and (best is None or described["totalSec"] < best["totalSec"]):
+                    best = described
+        if best is not None:
+            pair["optimalRoute"] = best
+            pair["transferCount"] = best["transferCount"]
+        optimized.append(pair)
+    return optimized
+
+
 def write_daily_range(pairs: list[dict], start_date: str, days: int, count: int) -> None:
     pairs = daily_eligible_pairs(pairs)
     start = date.fromisoformat(start_date)
@@ -1724,6 +1765,7 @@ def write_daily_range(pairs: list[dict], start_date: str, days: int, count: int)
         dates.append(day.isoformat())
         seed_namespace = CITY_CONFIG["puzzles"]["seedNamespace"]
         selected = select_varied_playable(pairs, count, f"{seed_namespace}-daily:{day.isoformat()}")
+        selected = optimize_daily_endpoint_hubs(selected)
         data = {"metadata": daily_metadata(day, len(selected)), "puzzles": selected}
         write_json(DAILY_DIR / f"{day.isoformat()}.json", data)
     index = {
