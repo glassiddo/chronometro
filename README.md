@@ -103,7 +103,9 @@ times come from saved-snapshot Journey Planner responses for a configured
 representative weekday at 08:00. Tube runtimes use the median positive observed
 segment interval; repeated station records are collapsed first. Expected waits
 remain half the median weekday 07:00–10:00 departure gap, with configured mode
-fallbacks.
+fallbacks. When a complete ride is served by both Circle and Hammersmith & City,
+their frequencies are combined to model taking the first suitable train; the
+combined wait is not used beyond the shared stop sequence.
 
 Ordinary same-station Tube changes use a 120-second estimate. Separate records
 sharing a TfL hub are joined by an explicit 180-second connection; optional

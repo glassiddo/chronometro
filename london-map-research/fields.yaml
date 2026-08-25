@@ -1,0 +1,47 @@
+representation:
+  map_type:
+    description: Geographic, schematic, hybrid, or abstract locator.
+    detail_level: detailed
+  map_task:
+    description: Orientation, network reading, distance impression, or visual identity.
+    detail_level: detailed
+content:
+  orientation_anchors:
+    description: Rivers, city centre, airports, termini, landmarks, compass, and scale.
+    detail_level: detailed
+  route_and_transfer_salience:
+    description: Whether the selected route, lines, and changes are visible.
+    detail_level: detailed
+  omission_policy:
+    description: Elements retained first when space is constrained.
+    detail_level: moderate
+behavior:
+  framing_policy:
+    description: Endpoint-, corridor-, city-, or region-bounded framing and zoom regimes.
+    detail_level: detailed
+  journey_length_behavior:
+    description: Performance for short central and long suburban or airport journeys.
+    detail_level: detailed
+  label_strategy:
+    description: Endpoint-only, landmark, interchange, hover, or no-label behavior.
+    detail_level: moderate
+evaluation:
+  small_screen_legibility:
+    description: Usefulness at roughly 320 by 110 to 220 pixels.
+    detail_level: detailed
+  visual_fit:
+    description: Compatibility with the game's compact print-like identity.
+    detail_level: moderate
+  implementation_cost:
+    description: Static data, geometry generation, and front-end complexity.
+    detail_level: moderate
+  licensing_and_trade_dress:
+    description: Data reuse, tile licensing, copyright, and official-map identity risk.
+    detail_level: detailed
+  city_symmetry:
+    description: Shared grammar versus London- and Paris-specific variants.
+    detail_level: moderate
+uncertain:
+  - exact map geometry source
+  - licensing terms for derived geographic basemaps
+  - user preference between route preview and geographic locator

@@ -48,6 +48,9 @@ def load_json(path: Path):
 
 def clean_station_name(value: str) -> str:
     value = re.sub(r"\s+(Underground|Rail) Station$", "", value or "")
+    value = re.sub(r"\s*\((?:H\s*&\s*C|Circle) Line\)(?:-Underground)?$", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"-Underground$", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"^London (?=(?:Paddington|Liverpool Street)$)", "", value, flags=re.IGNORECASE)
     return value.strip()
 
 

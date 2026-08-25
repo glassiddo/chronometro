@@ -739,6 +739,58 @@ class Router:
             self.wait_by_route.get(route_id, default_wait),
         )
 
+    def combined_wait_seconds(
+        self,
+        direction_id: str,
+        route_id: str,
+        from_station: str,
+        to_station: str,
+        base_wait: int | None = None,
+    ) -> int:
+        """Combine frequencies when the whole ride is served by interchangeable lines."""
+        wait = base_wait if base_wait is not None else self.wait_seconds(
+            direction_id,
+            route_id,
+            self.routes[route_id]["mode"],
+        )
+        group = next(
+            (
+                item.get("routeIds", [])
+                for item in CITY_CONFIG["network"].get("sharedServiceGroups", [])
+                if route_id in item.get("routeIds", [])
+            ),
+            None,
+        )
+        if not group:
+            return int(wait)
+        direction = self.directions[direction_id]
+        try:
+            start_index = direction["stations"].index(from_station)
+            end_index = direction["stations"].index(to_station, start_index + 1)
+        except ValueError:
+            return int(wait)
+        ride_stations = direction["stations"][start_index : end_index + 1]
+        waits_by_route = {route_id: int(wait)}
+        for candidate in self.directions.values():
+            candidate_route_id = candidate["routeId"]
+            if candidate_route_id == route_id or candidate_route_id not in group:
+                continue
+            stations = candidate["stations"]
+            width = len(ride_stations)
+            if any(stations[index : index + width] == ride_stations for index in range(len(stations) - width + 1)):
+                candidate_wait = self.wait_seconds(
+                    candidate["id"],
+                    candidate_route_id,
+                    self.routes[candidate_route_id]["mode"],
+                )
+                waits_by_route[candidate_route_id] = min(
+                    candidate_wait,
+                    waits_by_route.get(candidate_route_id, candidate_wait),
+                )
+        if len(waits_by_route) == 1:
+            return int(wait)
+        return round(1 / sum(1 / candidate_wait for candidate_wait in waits_by_route.values()))
+
     def transfer_walk(
         self,
         from_station: str,
@@ -1168,8 +1220,25 @@ class Router:
             steps[-1]["transferSec"] += delta
             steps[-1]["elapsedSec"] += delta
             totals["transferSec"] += delta
+        for step in steps:
+            if step.get("type") == "walk":
+                continue
+            combined_wait = self.combined_wait_seconds(
+                step["directionId"],
+                step["routeId"],
+                step["from"],
+                step["to"],
+                step["waitSec"],
+            )
+            wait_reduction = step["waitSec"] - combined_wait
+            if wait_reduction <= 0:
+                continue
+            step["waitSec"] = combined_wait
+            step["elapsedSec"] -= wait_reduction
+            totals["waitSec"] -= wait_reduction
+        total_from_steps = sum(step["elapsedSec"] for step in steps)
         return {
-            "totalSec": int(cost),
+            "totalSec": total_from_steps,
             "rideSec": totals["rideSec"],
             "waitSec": totals["waitSec"],
             "transferSec": totals["transferSec"],
@@ -1395,6 +1464,7 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
         "routes": routes,
         "directions": directions,
         "routeContinuations": build_route_continuations(directions),
+        "sharedServiceGroups": CITY_CONFIG["network"].get("sharedServiceGroups", []),
         "stations": stations,
         "canonicalStationIds": canonical_station_ids,
         "stationEquivalents": station_equivalents,
@@ -1456,6 +1526,7 @@ def assemble_normalized_network(source: dict) -> tuple[dict, Router, list[str], 
         "routes": routes,
         "directions": directions,
         "routeContinuations": source.get("routeContinuations", []),
+        "sharedServiceGroups": CITY_CONFIG["network"].get("sharedServiceGroups", []),
         "stations": stations,
         "canonicalStationIds": canonical_station_ids,
         "stationEquivalents": station_equivalents,

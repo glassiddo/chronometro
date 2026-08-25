@@ -456,6 +456,15 @@ h1 {
   aspect-ratio: 2 / 1;
 }
 
+[data-city="london"] .orientation-map {
+  border-color: #9fa7ad;
+  background: #f6f8f8;
+}
+
+[data-city="london"] .map-bg {
+  fill: #f4f5ef;
+}
+
 .map-bg {
   fill: #f3efe4;
 }
@@ -482,6 +491,26 @@ h1 {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 4.5;
+}
+
+.map-network-context {
+  fill: none;
+  stroke: #7e8588;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.45;
+  opacity: .38;
+}
+
+[data-city="london"] .waterway {
+  stroke: #5a9fc6;
+  stroke-width: 3.5;
+  opacity: .9;
+}
+
+[data-city="london"] .map-marker circle {
+  stroke: #fff;
+  stroke-width: 2.5px;
 }
 
 .map-marker circle {
@@ -594,7 +623,9 @@ h1 {
   height: auto;
   min-height: 22px;
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: 2px;
+  border-color: rgba(0, 0, 0, .5);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .16);
   font-size: 10px;
   line-height: 1.05;
   overflow-wrap: anywhere;
@@ -608,7 +639,9 @@ h1 {
   height: auto;
   min-height: 30px;
   padding-block: 4px;
-  border-radius: 5px;
+  border-radius: 2px;
+  border-color: rgba(0, 0, 0, .5);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .14);
   font-size: 11px;
   line-height: 1.05;
   text-align: center;

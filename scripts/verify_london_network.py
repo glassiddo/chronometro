@@ -50,6 +50,14 @@ def main() -> None:
     require(len(set(waits[r] for r in network["routes"] if r != "elizabeth")) > 3, "Tube waits look over-collapsed")
 
     router = build_data.Router(network["stations"], network["routes"], network["directions"], network["transfers"], network["routeTransfers"], network["metadata"]["waitSecondsByDirection"], network["metadata"]["waitSecondsByRoute"], network["canonicalStationIds"])
+    require(
+        router.combined_wait_seconds("circle:1", "circle", "940GZZLUHSC", "940GZZLULVT") == 150,
+        "Circle/H&C shared corridor should combine two 10-minute headways into a 150s expected wait",
+    )
+    require(
+        router.combined_wait_seconds("circle:1", "circle", "940GZZLUHSC", "940GZZLUALD") == 300,
+        "Circle-only travel beyond Liverpool Street must keep the Circle wait",
+    )
     checked = []
 
     def check_route(label: str, start: str, end: str, expected_lines: list[str], expected_seconds: int | None = None) -> dict:
