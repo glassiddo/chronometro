@@ -229,7 +229,34 @@ function currentPuzzle() {
   return state.daily[state.puzzleIndex];
 }
 
-function renderRouteList(steps, { showDirection = true, showDetail = true, showElapsed = true, compactElapsed = false } = {}) {
+function ridePathStationIds(step) {
+  const dir = direction(step.directionId);
+  if (!dir) return [];
+  const fromIndex = dir.stations.indexOf(step.from);
+  const toIndex = dir.stations.indexOf(step.to);
+  if (fromIndex >= 0 && toIndex > fromIndex) return dir.stations.slice(fromIndex, toIndex + 1);
+  const continuation = routeContinuation(step.directionId);
+  if (!continuation || fromIndex < 0 || dir.stations[dir.stations.length - 1] !== continuation.stationId) return [];
+  const nextDir = direction(continuation.toDirectionId);
+  const nextToIndex = nextDir?.stations.indexOf(step.to) ?? -1;
+  if (nextToIndex <= 0) return [];
+  return [...dir.stations.slice(fromIndex), ...nextDir.stations.slice(1, nextToIndex + 1)];
+}
+
+function branchViaLabel(step) {
+  if (CITY_ID !== "london" || stepType(step) !== "ride") return "";
+  const selectedPath = ridePathStationIds(step);
+  if (selectedPath.length < 3) return "";
+  const pathKeys = new Set();
+  boardableDirectionIds(step.from, step.routeId).forEach((directionId) => {
+    const path = ridePathStationIds({ ...step, directionId });
+    if (path.length >= 2) pathKeys.add(path.join(":"));
+  });
+  if (pathKeys.size < 2) return "";
+  return stationDisplayName(selectedPath[1]);
+}
+
+function renderRouteList(steps, { showDirection = true, showBranchVia = false, showDetail = true, showElapsed = true, compactElapsed = false } = {}) {
   if (!steps.length) return `<p class="muted">No steps yet.</p>`;
   return steps
     .map(
@@ -252,12 +279,14 @@ function renderRouteList(steps, { showDirection = true, showDetail = true, showE
         </div>
       `;
         }
+        const viaLabel = showBranchVia ? branchViaLabel(step) : "";
         return `
         <div class="leg-chip">
           ${lineBadge(step.routeId)}
           <p>
             <strong>${escapeHtml(stationDisplayName(step.from))} → ${escapeHtml(stationDisplayName(step.to))}</strong>
             ${showDirection ? `<small>Direction ${escapeHtml(directionGroupLabel(direction(step.directionId).label))}</small>` : ""}
+            ${viaLabel ? `<small>Via ${escapeHtml(viaLabel)}</small>` : ""}
             ${detail ? `<small class="leg-detail">${escapeHtml(detail)}</small>` : ""}
           </p>
           ${elapsed}
@@ -2780,62 +2809,10 @@ function addLeg(toStation) {
   }
 }
 
-function routeSignature(steps) {
-  return steps
-    .map((step) =>
-      stepType(step) === "walk"
-        ? `walk:${step.from}:${step.to}`
-        : `ride:${step.routeId}:${step.directionId}:${step.from}:${step.to}`,
-    )
-    .join("|");
-}
-
-function fastestRideTimingForLeg(step, previousRide) {
-  const r = route(step.routeId);
-  if (!r) return null;
-  const candidates = boardableDirectionIds(step.from, step.routeId)
-    .map((directionId) => {
-      const rideSec = runtimeBetween(directionId, step.from, step.to);
-      if (!Number.isFinite(rideSec)) return null;
-      const transferSec = previousRide
-        ? transferSeconds(
-            step.from,
-            step.from,
-            previousRide.routeId,
-            step.routeId,
-            route(previousRide.routeId).mode,
-            r.mode,
-          )
-        : Number(step.transferSec) || 0;
-      if (!Number.isFinite(transferSec)) return null;
-      const waitSec = combinedWaitSeconds(directionId, step.routeId, step.from, step.to);
-      return { rideSec, waitSec, transferSec, elapsedSec: rideSec + waitSec + transferSec };
-    })
-    .filter(Boolean);
-  return candidates.reduce((best, candidate) => (!best || candidate.elapsedSec < best.elapsedSec ? candidate : best), null);
-}
-
-function bestComparableTotalSec(steps, fallbackTotalSec) {
-  let totalSec = 0;
-  let previousRide = null;
-  for (const step of steps) {
-    if (stepType(step) === "walk") {
-      totalSec += Number.isFinite(step.elapsedSec) ? step.elapsedSec : Number(step.transferSec) || 0;
-      previousRide = null;
-      continue;
-    }
-    const bestTiming = fastestRideTimingForLeg(step, previousRide);
-    totalSec += bestTiming?.elapsedSec ?? step.elapsedSec ?? 0;
-    previousRide = step;
-  }
-  return Number.isFinite(totalSec) && totalSec > 0 ? totalSec : fallbackTotalSec;
-}
-
-function scoreRoute(puzzle, signature, totalSec, steps = []) {
+function scoreRoute(puzzle, totalSec) {
   const optimal = puzzle.optimalRoute;
-  const exact = signature === optimal.signature;
-  const comparableTotalSec = Math.min(totalSec, bestComparableTotalSec(steps, totalSec));
-  const perfect = exact || Math.max(0, comparableTotalSec - optimal.totalSec) <= 1;
+  const comparableTotalSec = totalSec;
+  const perfect = Math.max(0, comparableTotalSec - optimal.totalSec) <= 1;
   if (perfect) return { score: 100, label: "Perfect" };
 
   const deltaSec = Math.max(0, comparableTotalSec - optimal.totalSec);
@@ -2866,7 +2843,7 @@ function routePanel(title, steps) {
   return `
     <div class="route-panel">
       <h3>${escapeHtml(title)}</h3>
-      <div class="route-list">${renderRouteList(visibleSteps, { showDirection: false, showElapsed: false, compactElapsed: true })}</div>
+      <div class="route-list">${renderRouteList(visibleSteps, { showDirection: false, showBranchVia: true, showElapsed: false, compactElapsed: true })}</div>
     </div>
   `;
 }
@@ -2930,8 +2907,7 @@ function precomputedSteps(routeInfo) {
 
 function renderResult() {
   const puzzle = currentPuzzle();
-  const signature = routeSignature(state.steps);
-  const scored = scoreRoute(puzzle, signature, state.totalSec, state.steps);
+  const scored = scoreRoute(puzzle, state.totalSec);
   const optimal = puzzle.optimalRoute;
   const optimalSteps = precomputedSteps(optimal);
   state.results[state.puzzleIndex] = {

@@ -60,6 +60,5 @@
     "allPairs": "public/data/london/generated/all-pairs.json",
     "example": "public/data/london/example/puzzles.json",
     "daily": "public/data/london/daily"
-  },
-  "legacyPaths": {}
+  }
 }

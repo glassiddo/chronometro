@@ -3,14 +3,14 @@
   "id": "paris",
   "name": "Paris",
   "gameTitle": "Chronométro",
-  "networkTitle": "MÃ©tro Express",
+  "networkTitle": "Paris transit network",
   "timezone": "Europe/Paris",
   "locale": "fr",
   "source": {
     "type": "gtfs",
     "directory": "gouv_paris_gtfs-export",
     "adapter": "paris",
-    "publisher": "ITO World modified GTFS export derived from Ile-de-France Mobilites",
+    "publisher": "ITO World modified GTFS export derived from Île-de-France Mobilités",
     "fallbackVersion": "20260630_200738",
     "fallbackValidFrom": "2026-06-27",
     "fallbackValidTo": "2026-07-29"
@@ -61,10 +61,5 @@
     "allPairs": "public/data/paris/generated/all-pairs.json",
     "example": "public/data/paris/example/puzzles.json",
     "daily": "public/data/paris/daily"
-  },
-  "legacyPaths": {
-    "network": "public/data/metro-express-network.json",
-    "example": "public/data/example/metro-express-example-data.json",
-    "daily": "public/data/daily"
   }
 }

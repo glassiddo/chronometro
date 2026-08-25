@@ -340,7 +340,15 @@ def main() -> None:
     require("waitSecondsByDirection" in app and "waitSecondsByRoute" in app, "frontend does not use derived waits")
     require("routeTransfers" in app and "transferFallback" in app, "frontend does not use route transfer fallback rules")
     require("formatLegBreakdown" in app and "rideSec" in app, "frontend does not expose timing breakdowns")
-    require("function addWalkStep(" in app and "walk:" in app, "frontend does not expose explicit walk steps")
+    require(
+        "function scoreRoute(puzzle, totalSec)" in app and "bestComparableTotalSec" not in app,
+        "frontend scoring must use the player's selected branch timing",
+    )
+    require("function branchViaLabel(" in app and "showBranchVia: true" in app, "frontend route review hides branch differences")
+    require(
+        "function addWalkStep(" in app and 'type: "walk"' in app and 'stepType(step) === "walk"' in app,
+        "frontend does not expose explicit walk steps",
+    )
     require('"steps": steps' in build, "backend does not emit route steps")
     require("function canonicalStationId(" in app and "function sameStation(" in app, "frontend lacks canonical station helpers")
     require(
