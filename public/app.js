@@ -120,11 +120,15 @@ function formatLegBreakdown(leg) {
       : [leg.transferSec, leg.waitSec, leg.rideSec].reduce((sum, sec) => sum + (Number.isFinite(sec) ? sec : 0), 0);
   if (stepType(leg) === "walk") return `${formatPanelTime(totalSec)} walk`;
 
-  const waitTransferSec = (Number.isFinite(leg.transferSec) ? leg.transferSec : 0) + (Number.isFinite(leg.waitSec) ? leg.waitSec : 0);
+  const waitSec = Number.isFinite(leg.waitSec) ? leg.waitSec : 0;
+  const transferSec = Number.isFinite(leg.transferSec) ? leg.transferSec : 0;
+  const waitTransferSec = transferSec + waitSec;
   const parts = [
     Number.isFinite(totalSec) && totalSec > 0 ? formatPanelTime(totalSec) : "",
     Number.isFinite(leg.rideSec) && leg.rideSec > 0 ? `${formatPanelTime(leg.rideSec)} ride` : "",
-    waitTransferSec > 0 ? `${formatPanelTime(waitTransferSec)} wait+transfer` : "",
+    leg.foldedWalkSec > 0 && waitSec > 0 ? `${formatPanelTime(waitSec)} wait` : "",
+    leg.foldedWalkSec > 0 && transferSec > 0 ? `${formatPanelTime(transferSec)} transfer+walk` : "",
+    !leg.foldedWalkSec && waitTransferSec > 0 ? `${formatPanelTime(waitTransferSec)} wait+transfer` : "",
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : "";
 }
@@ -196,19 +200,11 @@ function directionGroupLabel(label) {
 }
 
 function directionOptionKey(candidate) {
-  if (CITY_ID !== "london") return `label:${candidate.label}`;
-  const dir = direction(candidate.dirId);
-  const boardIndex = dir.stations.indexOf(candidate.boardStation);
-  const nextStationId = dir.stations[boardIndex + 1];
-  return nextStationId ? `next:${stationDisplayName(nextStationId)}` : `label:${candidate.label}`;
+  return `label:${candidate.label}`;
 }
 
 function directionOptionLabel(candidates) {
-  if (CITY_ID !== "london" || candidates.length === 1) return candidates[0].label;
-  const dir = direction(candidates[0].dirId);
-  const boardIndex = dir.stations.indexOf(candidates[0].boardStation);
-  const nextStationId = dir.stations[boardIndex + 1];
-  return nextStationId ? stationDisplayName(nextStationId) : candidates[0].label;
+  return candidates[0].label;
 }
 
 function escapeHtml(value) {
@@ -2621,7 +2617,9 @@ function renderAlightStep() {
       if (!existing || runSec < existing.runSec) choiceMap.set(choiceKey, { stationId, runSec, ...candidate });
     });
   });
-  const choices = [...choiceMap.values()];
+  const choices = [...choiceMap.values()].sort(
+    (a, b) => a.runSec - b.runSec || compareText(stationDisplayName(a.stationId), stationDisplayName(b.stationId)),
+  );
   const dir = direction(selected.directionId);
   const r = route(selected.routeId);
   const transferSignal = (choice) => {
@@ -2828,7 +2826,32 @@ function scoreRoute(puzzle, totalSec) {
   return { score, label: "Slow route" };
 }
 
-function reviewVisibleSteps(steps) {
+function reviewVisibleSteps(steps, { foldWalks = false } = {}) {
+  if (foldWalks) {
+    const visible = [];
+    let pendingWalkSec = 0;
+    steps.forEach((step) => {
+      if (stepType(step) === "walk") {
+        pendingWalkSec += Number.isFinite(step.transferSec) ? step.transferSec : step.elapsedSec || 0;
+        return;
+      }
+      const visibleStep = { ...step };
+      if (pendingWalkSec > 0) {
+        visibleStep.transferSec = (Number.isFinite(visibleStep.transferSec) ? visibleStep.transferSec : 0) + pendingWalkSec;
+        visibleStep.elapsedSec = (Number.isFinite(visibleStep.elapsedSec) ? visibleStep.elapsedSec : 0) + pendingWalkSec;
+        visibleStep.foldedWalkSec = pendingWalkSec;
+        pendingWalkSec = 0;
+      }
+      visible.push(visibleStep);
+    });
+    if (pendingWalkSec > 0 && visible.length) {
+      const last = visible[visible.length - 1];
+      last.transferSec = (Number.isFinite(last.transferSec) ? last.transferSec : 0) + pendingWalkSec;
+      last.elapsedSec = (Number.isFinite(last.elapsedSec) ? last.elapsedSec : 0) + pendingWalkSec;
+      last.foldedWalkSec = (last.foldedWalkSec || 0) + pendingWalkSec;
+    }
+    return visible;
+  }
   return steps.filter((step, index) => {
     if (stepType(step) !== "walk") return true;
     const adjacentRides = [steps[index - 1], steps[index + 1]].filter(
@@ -2838,8 +2861,8 @@ function reviewVisibleSteps(steps) {
   });
 }
 
-function routePanel(title, steps) {
-  const visibleSteps = reviewVisibleSteps(steps);
+function routePanel(title, steps, { foldWalks = false } = {}) {
+  const visibleSteps = reviewVisibleSteps(steps, { foldWalks });
   return `
     <div class="route-panel">
       <h3>${escapeHtml(title)}</h3>
@@ -2852,7 +2875,7 @@ function routeComparisonMarkup(userSteps, optimalSteps) {
   return `
     <div class="comparison">
       ${routePanel("Your route", userSteps)}
-      ${routePanel("Fastest route", optimalSteps)}
+      ${routePanel("Fastest route", optimalSteps, { foldWalks: true })}
     </div>
     <div class="comparison-tabs" data-comparison-tabs>
       <div class="comparison-tablist" role="tablist" aria-label="Route comparison">
@@ -2863,7 +2886,7 @@ function routeComparisonMarkup(userSteps, optimalSteps) {
         ${routePanel("Your route", userSteps)}
       </div>
       <div class="comparison-tabpanel" data-route-panel="fastest" hidden>
-        ${routePanel("Fastest route", optimalSteps)}
+        ${routePanel("Fastest route", optimalSteps, { foldWalks: true })}
       </div>
     </div>
   `;
@@ -2957,7 +2980,7 @@ function giveUp() {
         <div class="scorebox"><span>Score</span><strong>0</strong></div>
         <div class="scorebox"><span>Fastest time</span><strong>${formatTime(optimal.totalSec)}</strong></div>
       </div>
-      ${routePanel("Fastest route", optimalSteps)}
+      ${routePanel("Fastest route", optimalSteps, { foldWalks: true })}
       <div class="toolbar">
         <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === puzzleCount() ? "Summary" : "Next puzzle"}</button>
       </div>

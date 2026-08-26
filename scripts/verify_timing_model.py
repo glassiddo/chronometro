@@ -346,6 +346,21 @@ def main() -> None:
     )
     require("function branchViaLabel(" in app and "showBranchVia: true" in app, "frontend route review hides branch differences")
     require(
+        'return `label:${candidate.label}`;' in app
+        and 'return candidates[0].label;' in app,
+        "frontend direction choices are not grouped by their passenger-facing destination",
+    )
+    require(
+        "a.runSec - b.runSec" in app and "stationDisplayName(a.stationId)" in app,
+        "frontend merged station lists are not sorted by journey time",
+    )
+    require(
+        "function reviewVisibleSteps(steps, { foldWalks = false } = {})" in app
+        and 'routePanel("Fastest route", optimalSteps, { foldWalks: true })' in app
+        and "transfer+walk" in app,
+        "fastest-route walks are not folded into transfer timing",
+    )
+    require(
         "function addWalkStep(" in app and 'type: "walk"' in app and 'stepType(step) === "walk"' in app,
         "frontend does not expose explicit walk steps",
     )

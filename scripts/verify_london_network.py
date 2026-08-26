@@ -32,6 +32,16 @@ def main() -> None:
     require(network["routes"]["elizabeth"]["color"] == "#60399E", "Elizabeth colour changed")
     require(network["transfers"].get("940GZZLUPAC", {}).get("910GPADTLL") == 180, "Paddington interchange missing")
 
+    hatton_cross = "940GZZLUHNX"
+    piccadilly_labels = {
+        "Heathrow" if network["directions"][direction_id]["label"] in {"Heathrow Terminal 4", "Heathrow Terminal 5"}
+        else network["directions"][direction_id]["label"]
+        for direction_id in network["stations"][hatton_cross]["services"]["piccadilly"]
+        if network["directions"][direction_id]["stations"].index(hatton_cross)
+        < len(network["directions"][direction_id]["stations"]) - 1
+    }
+    require(piccadilly_labels == {"Cockfosters", "Heathrow"}, f"Hatton Cross direction groups changed: {piccadilly_labels}")
+
     equivalent_pairs = {
         frozenset((left, right))
         for group in network["stationEquivalents"]
