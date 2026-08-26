@@ -8,7 +8,7 @@ const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
-const DATA_REVISION = "20260826-chicago";
+const DATA_REVISION = "20260826-chicago-ui2";
 
 const state = {
   data: null,
@@ -32,6 +32,9 @@ function station(id) {
 
 function stationDisplayName(stationId) {
   const name = station(stationId).name;
+  if (CITY_ID === "chicago") {
+    return name.replace(/\s+\((?:Red|Blue|Brown|Green|Orange|Pink|Purple)(?:\/(?:Red|Blue|Brown|Green|Orange|Pink|Purple))*\)$/i, "");
+  }
   if (CITY_ID !== "london") return name;
   return name
     .replace(/\s*\([^)]*Line[^)]*\)/gi, "")
@@ -2067,7 +2070,9 @@ function configureCityMap() {
     outline: [],
     parks: [],
     airport: null,
-    waterway: isChicago ? [[-87.60,41.70],[-87.60,42.08]] : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
+    waterway: isChicago
+      ? [[-87.595,41.70],[-87.600,41.76],[-87.612,41.82],[-87.625,41.88],[-87.613,41.94],[-87.600,42.01],[-87.592,42.08]]
+      : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
   };
 }
 
@@ -2485,11 +2490,11 @@ function renderLineStep(message = "") {
                 .map((option, index) => {
                   const r = route(option.routeId);
                   return `
-                    <button class="choice line-choice" data-line-index="${index}">
+                    <button class="choice line-choice" data-line-index="${index}"${CITY_ID === "chicago" ? ` aria-label="Board ${escapeHtml(routeDisplayName(r))}"` : ""}>
                       ${lineChoiceMarker(option.routeId)}
-                      <span>
+                      ${CITY_ID === "chicago" ? "" : `<span>
                         <strong>${escapeHtml(routeChoiceLabel(r))}</strong>
-                      </span>
+                      </span>`}
                     </button>
                   `;
                 })
@@ -2618,8 +2623,16 @@ function renderAlightStep() {
     downstream.forEach((stationId) => {
       const runSec = runtimeBetween(candidate.dirId, candidate.boardStation, stationId);
       const choiceKey = CITY_ID === "london" ? stationDisplayName(stationId) : stationId;
+      const choiceSec = runSec + candidate.walkSec + combinedWaitSeconds(
+        candidate.dirId,
+        selected.routeId,
+        candidate.boardStation,
+        stationId,
+      );
       const existing = choiceMap.get(choiceKey);
-      if (!existing || runSec < existing.runSec) choiceMap.set(choiceKey, { stationId, runSec, ...candidate });
+      if (!existing || choiceSec < existing.choiceSec) {
+        choiceMap.set(choiceKey, { stationId, runSec, choiceSec, ...candidate });
+      }
     });
   });
   const choices = [...choiceMap.values()].sort(
