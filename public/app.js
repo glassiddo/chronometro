@@ -8,7 +8,7 @@ const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
-const DATA_REVISION = "20260826-chicago-ui2";
+const DATA_REVISION = "20260826-chicago-ui4";
 
 const state = {
   data: null,
@@ -2065,19 +2065,20 @@ function configureCityMap() {
     width: 320,
     height: 220,
     bounds: isChicago
-      ? { minLat: 41.70, maxLat: 42.08, minLon: -87.91, maxLon: -87.60 }
+      ? { minLat: 41.70, maxLat: 42.08, minLon: -87.91, maxLon: -87.54 }
       : { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
     outline: [],
     parks: [],
     airport: null,
-    waterway: isChicago
-      ? [[-87.595,41.70],[-87.600,41.76],[-87.612,41.82],[-87.625,41.88],[-87.613,41.94],[-87.600,42.01],[-87.592,42.08]]
-      : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
+    waterbody: isChicago
+      ? [[-87.595,41.70],[-87.600,41.76],[-87.612,41.82],[-87.625,41.88],[-87.613,41.94],[-87.600,42.01],[-87.592,42.08],[-87.51,42.08],[-87.51,41.70]]
+      : [],
+    waterway: isChicago ? [] : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
   };
 }
 
 function fitCityMapToPuzzle() {
-  if (CITY_ID === "paris") {
+  if (CITY_ID === "paris" || CITY_ID === "chicago") {
     CITY_MAP.viewBounds = CITY_MAP.bounds;
     return;
   }
@@ -2092,7 +2093,7 @@ function fitCityMapToPuzzle() {
     return;
   }
   const centralBounds = CITY_ID === "chicago"
-    ? { minLat: 41.84, maxLat: 41.93, minLon: -87.72, maxLon: -87.60 }
+    ? { minLat: 41.84, maxLat: 41.93, minLon: -87.72, maxLon: -87.54 }
     : { minLat: 51.47, maxLat: 51.56, minLon: -0.25, maxLon: 0.12 };
   const inside = (point, bounds) =>
     point.lat >= bounds.minLat && point.lat <= bounds.maxLat && point.lon >= bounds.minLon && point.lon <= bounds.maxLon;
@@ -2209,8 +2210,9 @@ function orientationMapMarkup() {
         ${CITY_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
         ${CITY_MAP.airport ? `<path class="map-airport" d="${mapCurvePath(CITY_MAP.airport, true)}"></path>` : ""}
         ${CITY_MAP.outline.length ? `<path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>` : ""}
+        ${CITY_MAP.waterbody?.length ? `<path class="waterbody" d="${mapCurvePath(CITY_MAP.waterbody, true)}"></path>` : ""}
+        ${CITY_MAP.waterway.length ? `<path class="waterway" d="${mapCurvePath(CITY_MAP.waterway)}"></path>` : ""}
         ${networkContextMapMarkup()}
-        <path class="waterway" d="${mapCurvePath(CITY_MAP.waterway)}"></path>
         ${mapMarker(puzzle.start, "Start", "start-marker")}
         ${mapMarker(puzzle.end, "End", "end-marker")}
         ${current}
