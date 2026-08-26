@@ -17,7 +17,7 @@ The site is static: the browser loads a normalized city network and five pre-gen
 ### London
 
 - All 11 Underground lines and the Elizabeth line
-- Preliminary daily puzzles from 25 through 31 August 2026
+- Preliminary daily puzzles from 25 August through 15 September 2026
 - Excludes London Overground, DLR, trams, buses, and National Rail
 
 London branch paths are modeled separately. Circle and H&C frequencies are combined only when either service can complete the entire selected ride. Metropolitan fast and semi-fast service distinctions are not currently modeled.

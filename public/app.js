@@ -8,7 +8,7 @@ const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
-const DATA_REVISION = "20260825-london-preview-2";
+const DATA_REVISION = "20260826-london-mid-september";
 
 const state = {
   data: null,
@@ -3153,7 +3153,7 @@ function showLoadingState() {
 function updateCityChrome() {
   const city = state.data.metadata.city;
   $("#citySelector").value = CITY_ID;
-  $("#cityKicker").textContent = `${city.name} daily route puzzle`;
+  $("#cityKicker").textContent = "Daily route puzzle";
   $("#cityDisclaimer").textContent = city.attribution.disclaimer;
   document.title = `Chronométro — ${city.name}`;
   document.documentElement.dataset.city = CITY_ID;
