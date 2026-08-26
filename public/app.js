@@ -1,4 +1,4 @@
-const SUPPORTED_CITY_IDS = new Set(["paris", "london"]);
+const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago"]);
 const requestedCityId = new URLSearchParams(window.location.search).get("city");
 const CITY_ID = SUPPORTED_CITY_IDS.has(requestedCityId) ? requestedCityId : "paris";
 const CITY_DATA_URL = `./data/${CITY_ID}`;
@@ -8,7 +8,7 @@ const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
-const DATA_REVISION = "20260826-london-mid-september";
+const DATA_REVISION = "20260826-chicago";
 
 const state = {
   data: null,
@@ -2057,19 +2057,22 @@ function configureCityMap() {
     CITY_MAP = PARIS_MAP;
     return;
   }
+  const isChicago = CITY_ID === "chicago";
   CITY_MAP = {
     width: 320,
     height: 220,
-    bounds: { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
+    bounds: isChicago
+      ? { minLat: 41.70, maxLat: 42.08, minLon: -87.91, maxLon: -87.60 }
+      : { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
     outline: [],
     parks: [],
     airport: null,
-    waterway: [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
+    waterway: isChicago ? [[-87.60,41.70],[-87.60,42.08]] : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
   };
 }
 
-function fitLondonMapToPuzzle() {
-  if (CITY_ID !== "london") {
+function fitCityMapToPuzzle() {
+  if (CITY_ID === "paris") {
     CITY_MAP.viewBounds = CITY_MAP.bounds;
     return;
   }
@@ -2083,7 +2086,9 @@ function fitLondonMapToPuzzle() {
     CITY_MAP.viewBounds = CITY_MAP.bounds;
     return;
   }
-  const centralBounds = { minLat: 51.47, maxLat: 51.56, minLon: -0.25, maxLon: 0.12 };
+  const centralBounds = CITY_ID === "chicago"
+    ? { minLat: 41.84, maxLat: 41.93, minLon: -87.72, maxLon: -87.60 }
+    : { minLat: 51.47, maxLat: 51.56, minLon: -0.25, maxLon: 0.12 };
   const inside = (point, bounds) =>
     point.lat >= bounds.minLat && point.lat <= bounds.maxLat && point.lon >= bounds.minLon && point.lon <= bounds.maxLon;
   if (inside(start, centralBounds) && inside(end, centralBounds)) {
@@ -2092,7 +2097,7 @@ function fitLondonMapToPuzzle() {
   }
   const rawLatSpan = Math.max(...lats) - Math.min(...lats);
   const rawLonSpan = Math.max(...lons) - Math.min(...lons);
-  if (rawLatSpan > 0.13 || rawLonSpan > 0.3) {
+  if (rawLatSpan > (CITY_ID === "chicago" ? 0.18 : 0.13) || rawLonSpan > 0.3) {
     CITY_MAP.viewBounds = CITY_MAP.bounds;
     return;
   }
@@ -2185,7 +2190,7 @@ function networkContextMapMarkup() {
 
 function orientationMapMarkup() {
   const puzzle = currentPuzzle();
-  fitLondonMapToPuzzle();
+  fitCityMapToPuzzle();
   const current =
     state.currentStation && !samePuzzleStation(state.currentStation, puzzle.start) && !samePuzzleStation(state.currentStation, puzzle.end)
       ? mapMarker(state.currentStation, "Current", "current-marker")
@@ -3159,8 +3164,8 @@ function updateCityChrome() {
   document.documentElement.dataset.city = CITY_ID;
   document.querySelectorAll(".site-footer nav a").forEach((link) => {
     const url = new URL(link.href);
-    if (CITY_ID === "london") url.searchParams.set("city", "london");
-    else url.searchParams.delete("city");
+    if (CITY_ID === "paris") url.searchParams.delete("city");
+    else url.searchParams.set("city", CITY_ID);
     link.href = url;
   });
 }

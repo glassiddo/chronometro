@@ -1,5 +1,6 @@
 gouv_paris_gtfs-export/
 gouv_london_tfl-export/
+gouv_chicago_gtfs-export/
 scripts/__pycache__/
 *.pyc
 public/data/generated/

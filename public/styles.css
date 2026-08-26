@@ -461,6 +461,24 @@ h1 {
   background: #f6f8f8;
 }
 
+[data-city="chicago"] .orientation-map {
+  border-color: #b8d5e7;
+}
+
+[data-city="chicago"] .map-bg {
+  fill: #eef7fb;
+}
+
+[data-city="chicago"] .waterway {
+  stroke: #8cc6df;
+  stroke-width: 14;
+  opacity: .65;
+}
+
+.map-network-context--chicago {
+  opacity: .48;
+}
+
 [data-city="london"] .map-bg {
   fill: #f4f5ef;
 }

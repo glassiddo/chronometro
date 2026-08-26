@@ -282,8 +282,10 @@ def read_stop_times(
         header = next(reader)
         idx = {name: i for i, name in enumerate(header)}
 
-        current_trip = None
-        rows = []
+        # GTFS does not require stop_times.txt to be grouped by trip_id. CTA's
+        # feed interleaves trips, so collect selected rows by trip and finalize
+        # after the scan rather than treating every change of trip_id as a trip.
+        rows_by_trip: dict[str, list[tuple[int, str, int | None, int | None]]] = defaultdict(list)
         processed = 0
         selected_rows = 0
 
@@ -334,14 +336,10 @@ def read_stop_times(
         for row in reader:
             processed += 1
             trip_id = row[idx["trip_id"]]
-            if trip_id != current_trip:
-                finalize(current_trip, rows)
-                current_trip = trip_id
-                rows = []
             if trip_id in trips:
                 selected_rows += 1
                 raw_stop_routes[row[idx["stop_id"]]].add(trips[trip_id]["routeId"])
-                rows.append(
+                rows_by_trip[trip_id].append(
                     (
                         int(row[idx["stop_sequence"]]),
                         row[idx["stop_id"]],
@@ -352,7 +350,8 @@ def read_stop_times(
             if processed % 5_000_000 == 0:
                 log(f"processed {processed:,} stop_times rows ({selected_rows:,} selected)")
 
-        finalize(current_trip, rows)
+        for trip_id, trip_rows in rows_by_trip.items():
+            finalize(trip_id, trip_rows)
 
     log(f"built {len(segment_stats)} averaged consecutive station timings")
     log(f"found {len(pattern_counts)} selected trip patterns")

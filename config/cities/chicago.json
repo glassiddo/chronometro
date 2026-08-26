@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "chicago",
+  "name": "Chicago",
+  "gameTitle": "Chronométro",
+  "networkTitle": "Chicago ‘L’ network",
+  "timezone": "America/Chicago",
+  "locale": "en-US",
+  "source": {
+    "type": "gtfs",
+    "directory": "gouv_chicago_gtfs-export",
+    "adapter": "chicago",
+    "publisher": "Chicago Transit Authority static GTFS",
+    "feedUrl": "https://www.transitchicago.com/downloads/sch_data/google_transit.zip",
+    "fallbackVersion": "2026-08-06",
+    "fallbackValidFrom": "2026-08-05",
+    "fallbackValidTo": "2026-10-31"
+  },
+  "attribution": {
+    "display": "Data provided by Chicago Transit Authority",
+    "disclaimer": "Data provided by Chicago Transit Authority. Chronométro is independently made and is neither made nor endorsed by the CTA. Scheduled data only; no live Train Tracker data."
+  },
+  "modes": {
+    "l": {"label": "‘L’", "defaultWaitSeconds": 180, "maximumWaitSeconds": 600}
+  },
+  "timing": {
+    "peakStartSeconds": 25200,
+    "peakEndSeconds": 36000,
+    "minimumWaitSeconds": 30,
+    "transferDefaultsSeconds": {"same_mode": 180, "fallback": 180},
+    "stationEquivalenceDistanceMetres": 0,
+    "stationEquivalenceTransferSeconds": 0
+  },
+  "network": {
+    "maximumDirectionsPerRoute": 32,
+    "shortTurnModes": [],
+    "sharedServiceGroups": [],
+    "routeContinuations": []
+  },
+  "puzzles": {
+    "startDate": "2026-08-26",
+    "days": 365,
+    "dailyCount": 5,
+    "exampleCount": 100,
+    "minimumRouteDistanceMetres": 2000,
+    "minimumEndpointDistanceMetres": 1500,
+    "endpointModes": ["l"],
+    "boundedEndpointModes": [],
+    "bounds": {"minLat": 41.70, "maxLat": 42.08, "minLon": -87.91, "maxLon": -87.60},
+    "excludeSameComplexEndpoints": true,
+    "requireInterchangeEndpoints": false,
+    "seedNamespace": "chronometro-chicago-l-v1"
+  },
+  "paths": {
+    "network": "public/data/chicago/network.json",
+    "allPairs": "public/data/chicago/generated/all-pairs.json",
+    "example": "public/data/chicago/example/puzzles.json",
+    "daily": "public/data/chicago/daily"
+  }
+}
