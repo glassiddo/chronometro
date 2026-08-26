@@ -8,7 +8,7 @@ const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
-const DATA_REVISION = "20260826-chicago-ui4";
+const DATA_REVISION = "20260826-chicago-ui5";
 
 const state = {
   data: null,
@@ -33,7 +33,10 @@ function station(id) {
 function stationDisplayName(stationId) {
   const name = station(stationId).name;
   if (CITY_ID === "chicago") {
-    return name.replace(/\s+\((?:Red|Blue|Brown|Green|Orange|Pink|Purple)(?:\/(?:Red|Blue|Brown|Green|Orange|Pink|Purple))*\)$/i, "");
+    return name
+      .replace(/\s+\(Blue - ([^)]+) Branch\)$/i, " — $1 branch")
+      .replace(/\s+\(Subway\)$/i, "")
+      .replace(/\s+\((?:Red|Blue|Brown|Green|Orange|Pink|Purple)(?:\/(?:Red|Blue|Brown|Green|Orange|Pink|Purple))*\)$/i, "");
   }
   if (CITY_ID !== "london") return name;
   return name
@@ -194,7 +197,8 @@ function routeDisplayName(r) {
 }
 
 function routeChoiceLabel(r) {
-  return CITY_ID === "london" ? routeDisplayName(r) : `${modeName(r.mode)} ${r.label}`;
+  if (CITY_ID === "london" || CITY_ID === "chicago") return routeDisplayName(r);
+  return `${modeName(r.mode)} ${r.label}`;
 }
 
 function directionGroupLabel(label) {
@@ -2487,7 +2491,7 @@ function renderLineStep(message = "") {
       options.length
         ? `<section class="choice-section">
             <h3>Board here</h3>
-            <div class="choice-grid">
+            <div class="choice-grid line-choice-grid">
               ${options
                 .map((option, index) => {
                   const r = route(option.routeId);

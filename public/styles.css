@@ -499,10 +499,17 @@ h1 {
   box-shadow: none;
 }
 
+[data-city="chicago"] .line-choice-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 5px;
+}
+
 [data-city="chicago"] .line-choice .line-badge {
-  min-width: 54px;
-  height: 30px;
-  font-size: 12px;
+  min-width: 60px;
+  height: 32px;
+  font-size: 13px;
 }
 
 [data-city="chicago"] .line-choice:hover,
