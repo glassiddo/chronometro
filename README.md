@@ -1,10 +1,12 @@
 # Chronométro
 
+<img width="935" height="622" alt="image" src="https://github.com/user-attachments/assets/b7decbbe-b953-4313-adb7-9672a4e81325" />
+
 Chronométro is a daily transit-route puzzle for Paris, London, and Chicago. Players build a route between two stations and score up to 100 points according to its modeled journey time relative to the fastest stored route.
 
 Play at [chronometro.cc](https://chronometro.cc/).
 
-The site is static: the browser loads a normalized city network and five pre-generated puzzles for the selected date. Journey times combine scheduled or derived ride times, expected waits, and modeled interchanges. They are not live journey-planning estimates.
+The browser loads a normalized city network and five puzzles for the selected date. Journey times combine scheduled or derived ride times, expected waits, and modeled interchanges. They are not live journey-planning estimates.
 
 ## Current coverage
 
