@@ -1,26 +1,22 @@
 # Chronométro
 
-Chronométro is a daily transit-route puzzle for Paris and London. Players build a route between two stations and score up to 100 points according to its modeled journey time relative to the fastest stored route.
+Chronométro is a daily transit-route puzzle, currently available for Paris and London. Players build a route between two stations and score up to 100 points according to its modeled journey time relative to the fastest stored route.
 
 Play at [chronometro.cc](https://chronometro.cc/).
 
-The site is static: the browser loads a normalized city network and five pre-generated puzzles for the selected date. Journey times combine scheduled or derived ride times, expected waits, and modeled interchanges. They are not live journey-planning estimates.
+The browser loads a normalized city network and five puzzles for the selected date. Journey times combine scheduled or derived ride times, expected waits, and modeled interchanges. They are not live journey-planning estimates.
 
 ## Current coverage
 
 ### Paris
 
 - Metro, RER A–E, and tram T1–T14
-- Daily puzzles from 28 July 2026 through 27 July 2027
 - Excludes buses, ORLYVAL, CDG VAL, and non-RER rail
 
 ### London
 
 - All 11 Underground lines and the Elizabeth line
-- Preliminary daily puzzles from 25 through 31 August 2026
 - Excludes London Overground, DLR, trams, buses, and National Rail
-
-London branch paths are modeled separately. Circle and H&C frequencies are combined only when either service can complete the entire selected ride. Metropolitan fast and semi-fast service distinctions are not currently modeled.
 
 ## Data sources
 
