@@ -11,13 +11,13 @@ The site is static: the browser loads a normalized city network and five pre-gen
 ### Paris
 
 - Metro, RER A–E, and tram T1–T14
-- Daily puzzles from 28 July 2026 through 27 July 2027
+- Daily puzzles from 28 July through 31 December 2026
 - Excludes buses, ORLYVAL, CDG VAL, and non-RER rail
 
 ### London
 
 - All 11 Underground lines and the Elizabeth line
-- Preliminary daily puzzles from 25 August through 15 September 2026
+- Daily puzzles from 25 August through 31 December 2026
 - Excludes London Overground, DLR, trams, buses, and National Rail
 
 London branch paths are modeled separately. Circle and H&C frequencies are combined only when either service can complete the entire selected ride. Metropolitan fast and semi-fast service distinctions are not currently modeled.
@@ -27,7 +27,7 @@ London branch paths are modeled separately. Circle and H&C frequencies are combi
 - All eight CTA ‘L’ routes: Red, Blue, Brown, Green, Orange, Pink, Purple, and Yellow
 - 143 playable CTA parent stations; platform/direction stops are retained while parsing schedules and normalized through GTFS `parent_station`
 - Excludes CTA buses and Metra
-- Daily puzzles from 26 August 2026 through 25 August 2027
+- Daily puzzles from 26 August through 31 December 2026
 
 The Loop and Green branches come from complete scheduled GTFS trip patterns. Purple local and weekday Loop Express patterns remain distinct.
 
@@ -116,7 +116,7 @@ To refresh Chicago, download and extract CTA's current `google_transit.zip` into
 
 ## Timing limitations
 
-The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Branch-specific wait variation, route-pair-specific interchange times, and some service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. Puzzles after 31 October 2026 continue to use the fixed representative snapshot even though its source calendar has expired.
+The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Branch-specific wait variation, route-pair-specific interchange times, and some service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. November and December puzzles continue to use the fixed representative snapshot even though its source calendar expires on 31 October 2026.
 
 ## Attribution
 

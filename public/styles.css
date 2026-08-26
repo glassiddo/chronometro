@@ -442,7 +442,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
-  background: #fbfaf4;
+  background: #f3efe4;
 }
 
 .orientation-map svg {
@@ -458,15 +458,10 @@ h1 {
 
 [data-city="london"] .orientation-map {
   border-color: #9fa7ad;
-  background: #f6f8f8;
 }
 
 [data-city="chicago"] .orientation-map {
   border-color: #b8d5e7;
-}
-
-[data-city="chicago"] .map-bg {
-  fill: #eef7fb;
 }
 
 [data-city="chicago"] .waterbody {
@@ -516,10 +511,6 @@ h1 {
 [data-city="chicago"] .line-choice:focus-visible {
   background: transparent;
   box-shadow: none;
-}
-
-[data-city="london"] .map-bg {
-  fill: #f4f5ef;
 }
 
 .map-bg {

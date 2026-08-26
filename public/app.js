@@ -8,7 +8,7 @@ const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
-const DATA_REVISION = "20260826-chicago-ui5";
+const DATA_REVISION = "20260826-year-end";
 
 const state = {
   data: null,
