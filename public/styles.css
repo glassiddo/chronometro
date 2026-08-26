@@ -442,7 +442,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
-  background: #2596be;
+  background: #f1eee3;
 }
 
 .orientation-map svg {
@@ -514,7 +514,7 @@ h1 {
 }
 
 .map-bg {
-  fill: #2596be;
+  fill: #f1eee3;
 }
 
 .map-park {
