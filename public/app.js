@@ -2714,6 +2714,24 @@ function runtimeBetween(dirId, fromStation, toStation) {
   return firstPart + secondPart;
 }
 
+function bestEquivalentDirectionCandidate(selected, toStation) {
+  const candidates = selected.directionCandidates || [];
+  let best = null;
+  candidates.forEach((candidate) => {
+    const runSec = runtimeBetween(candidate.dirId, candidate.boardStation, toStation);
+    if (!Number.isFinite(runSec)) return;
+    const waitSec = combinedWaitSeconds(
+      candidate.dirId,
+      selected.routeId,
+      candidate.boardStation,
+      toStation,
+    );
+    const choiceSec = runSec + (candidate.walkSec || 0) + waitSec;
+    if (!best || choiceSec < best.choiceSec) best = { ...candidate, choiceSec };
+  });
+  return best;
+}
+
 function rideSegmentsBetween(dirId, fromStation, toStation) {
   const dir = direction(dirId);
   const fromIndex = dir.stations.indexOf(fromStation);
@@ -2793,6 +2811,11 @@ function addWalkStep(toStation, nextRouteId = null, { renderAfter = true } = {})
 
 function addLeg(toStation) {
   const selected = state.selected;
+  const bestCandidate = bestEquivalentDirectionCandidate(selected, toStation);
+  if (bestCandidate) {
+    selected.directionId = bestCandidate.dirId;
+    selected.boardStation = bestCandidate.boardStation;
+  }
   const runSec = runtimeBetween(selected.directionId, selected.boardStation, toStation);
   if (!Number.isFinite(runSec)) {
     renderLineStep("That leg is not connected in the selected direction.");

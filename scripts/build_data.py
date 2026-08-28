@@ -572,6 +572,61 @@ def read_transfers(stop_to_station: dict[str, str], used_stations: set[str]) -> 
     return transfer_times
 
 
+def filter_walking_transfers(
+    transfers: dict[str, dict[str, int]],
+) -> tuple[dict[str, dict[str, int]], dict[str, dict[str, int]]]:
+    policy = CITY_CONFIG["network"].get("walkingTransfers")
+    if not policy or policy.get("allowAll", True):
+        return transfers, {}
+    allowed_pairs = {
+        tuple(sorted(pair))
+        for pair in policy.get("allowedStationPairs", [])
+        if len(pair) == 2
+    }
+    active: dict[str, dict[str, int]] = defaultdict(dict)
+    excluded: dict[str, dict[str, int]] = defaultdict(dict)
+    for from_station, destinations in transfers.items():
+        for to_station, seconds in destinations.items():
+            target = active if (
+                from_station == to_station
+                or tuple(sorted((from_station, to_station))) in allowed_pairs
+            ) else excluded
+            target[from_station][to_station] = seconds
+    log(
+        f"walking transfer policy kept {sum(map(len, active.values()))} directed links and "
+        f"excluded {sum(map(len, excluded.values()))}"
+    )
+    return ({key: dict(value) for key, value in active.items()},
+            {key: dict(value) for key, value in excluded.items()})
+
+
+def filter_route_walking_transfers(
+    route_transfers: dict[str, dict[str, dict[str, dict[str, int]]]],
+) -> dict[str, dict[str, dict[str, dict[str, int]]]]:
+    policy = CITY_CONFIG["network"].get("walkingTransfers")
+    if not policy or policy.get("allowAll", True):
+        return route_transfers
+    allowed_pairs = {
+        tuple(sorted(pair))
+        for pair in policy.get("allowedStationPairs", [])
+        if len(pair) == 2
+    }
+    return {
+        from_station: {
+            to_station: routes
+            for to_station, routes in destinations.items()
+            if from_station == to_station
+            or tuple(sorted((from_station, to_station))) in allowed_pairs
+        }
+        for from_station, destinations in route_transfers.items()
+        if any(
+            from_station == to_station
+            or tuple(sorted((from_station, to_station))) in allowed_pairs
+            for to_station in destinations
+        )
+    }
+
+
 def read_route_transfers(
     stop_to_station: dict[str, str],
     raw_stop_routes: dict[str, set[str]],
@@ -1378,6 +1433,7 @@ def network_metadata(
         **read_feed_metadata(),
         "routeTypeMappingVerified": route_type_mapping_metadata(),
         "transferFallbackSeconds": TRANSFER_DEFAULTS,
+        "walkingTransferPolicy": CITY_CONFIG["network"].get("walkingTransfers", {"allowAll": True}),
         "waitSecondsByMode": WAIT_BY_MODE,
         "waitSecondsByDirection": wait_by_direction,
         "waitSecondsByRoute": wait_by_route,
@@ -1420,7 +1476,8 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
 
     stations = {station_id: all_station_meta[station_id] for station_id in sorted(used_stations)}
     build_station_services(stations, routes, directions)
-    transfers = read_transfers(stop_to_station, set(stations))
+    all_transfers = read_transfers(stop_to_station, set(stations))
+    transfers, excluded_transfers = filter_walking_transfers(all_transfers)
     canonical_station_ids, station_equivalents = build_station_equivalents(stations, transfers)
     for station_id, station in stations.items():
         station["complexId"] = canonical_station_ids.get(station_id, station_id)
@@ -1432,7 +1489,9 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
             direction_id for direction_id, direction in directions.items() if direction["routeId"] == route_id
         )
     wait_by_direction, wait_by_route = build_waits(directions, routes, direction_pattern_keys, pattern_peak_departures)
-    route_transfers = read_route_transfers(stop_to_station, raw_stop_routes, routes, set(stations))
+    route_transfers = filter_route_walking_transfers(
+        read_route_transfers(stop_to_station, raw_stop_routes, routes, set(stations))
+    )
 
     router = Router(
         stations,
@@ -1468,6 +1527,7 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
         "canonicalStationIds": canonical_station_ids,
         "stationEquivalents": station_equivalents,
         "transfers": transfers,
+        "excludedTransfers": excluded_transfers,
         "routeTransfers": route_transfers,
     }
     summary = {

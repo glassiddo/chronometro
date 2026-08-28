@@ -42,7 +42,36 @@
   "network": {
     "maximumDirectionsPerRoute": 18,
     "shortTurnModes": ["rer"],
-    "routeContinuations": [{"routeId": "8567", "stationId": "PARIS166100"}]
+    "routeContinuations": [{"routeId": "8567", "stationId": "PARIS166100"}],
+    "walkingTransfers": {
+      "allowAll": false,
+      "allowedStationPairs": [
+        ["ITOAUTO112960", "ITOAUTO112996"],
+        ["PARIS16527", "PARIS9438"],
+        ["ITOAUTO79135", "ITOAUTO80089"],
+        ["ITOAUTO69866", "PARIS137744"],
+        ["ITOAUTO79860", "ITOAUTO80178"],
+        ["ITOAUTO135850", "PARIS208683"],
+        ["ITOAUTO135850", "PARIS166014"],
+        ["ITOAUTO79087", "PARIS16028"],
+        ["ITOAUTO79087", "PARIS9440"],
+        ["ITOAUTO79087", "PARIS16178"],
+        ["ITOAUTO63174", "ITOAUTO97217"],
+        ["ITOAUTO63174", "ITOAUTO97325"],
+        ["ITOAUTO97217", "ITOAUTO97325"],
+        ["PARIS194562", "PARIS98644"],
+        ["ITOAUTO91269", "PARIS16527"],
+        ["ITOAUTO91269", "PARIS194562"],
+        ["ITOAUTO91269", "ITOAUTO96919"],
+        ["ITOAUTO96919", "PARIS16527"],
+        ["ITOAUTO96919", "PARIS194562"],
+        ["PARIS166071", "PARIS174244"],
+        ["ITOAUTO79041", "PARIS166088"],
+        ["ITOAUTO80181", "ITOAUTO90891"],
+        ["ITO464", "PARIS16027"],
+        ["ITOAUTO79800", "ITOAUTO97123"]
+      ]
+    }
   },
   "puzzles": {
     "startDate": "2026-07-28",
