@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "id": "washington-dc",
+  "name": "Washington, DC",
+  "gameTitle": "Chronométro",
+  "networkTitle": "Washington Metrorail network",
+  "timezone": "America/New_York",
+  "locale": "en-US",
+  "source": {
+    "type": "gtfs",
+    "directory": "gouv_washington_dc_gtfs-export",
+    "adapter": "washington_dc",
+    "publisher": "Washington Metropolitan Area Transit Authority static rail GTFS",
+    "feedUrl": "https://api.wmata.com/gtfs/rail-gtfs-static.zip",
+    "snapshotUrl": "https://files.mobilitydatabase.org/mdb-1847/mdb-1847-202608270118/mdb-1847-202608270118.zip",
+    "downloadDate": "2026-08-28",
+    "fallbackVersion": "mdb-1847-202608270118",
+    "fallbackValidFrom": "2026-08-26",
+    "fallbackValidTo": "2026-09-04",
+    "calendarValidTo": "2027-01-02"
+  },
+  "attribution": {
+    "display": "Schedule data provided by WMATA",
+    "disclaimer": "Schedule data provided by WMATA. Chronométro is independently made and is not affiliated with, sponsored by, or endorsed by WMATA. Static scheduled data only; no live arrivals, incidents, or real-time APIs."
+  },
+  "modes": {
+    "metrorail": {"label": "Metrorail", "defaultWaitSeconds": 240, "maximumWaitSeconds": 900}
+  },
+  "timing": {
+    "peakStartSeconds": 25200,
+    "peakEndSeconds": 36000,
+    "minimumWaitSeconds": 30,
+    "transferDefaultsSeconds": {"same_mode": 180, "fallback": 180},
+    "stationEquivalenceDistanceMetres": 0,
+    "stationEquivalenceTransferSeconds": 0
+  },
+  "network": {
+    "maximumDirectionsPerRoute": 16,
+    "shortTurnModes": ["metrorail"],
+    "sharedServiceGroups": [],
+    "routeContinuations": [],
+    "excludedPatternTerminiByRoute": {"SILVER": ["STN_D13"]},
+    "walkingTransfers": {"allowAll": true}
+  },
+  "puzzles": {
+    "startDate": "2026-08-29",
+    "days": 125,
+    "dailyCount": 5,
+    "exampleCount": 100,
+    "minimumRouteDistanceMetres": 2500,
+    "minimumEndpointDistanceMetres": 2000,
+    "endpointModes": ["metrorail"],
+    "boundedEndpointModes": [],
+    "bounds": {"minLat": 38.76, "maxLat": 39.13, "minLon": -77.50, "maxLon": -76.83},
+    "excludeSameComplexEndpoints": true,
+    "requireInterchangeEndpoints": false,
+    "seedNamespace": "chronometro-washington-dc-metrorail-v1"
+  },
+  "paths": {
+    "network": "public/data/washington-dc/network.json",
+    "allPairs": "public/data/washington-dc/generated/all-pairs.json",
+    "example": "public/data/washington-dc/example/puzzles.json",
+    "daily": "public/data/washington-dc/daily"
+  }
+}

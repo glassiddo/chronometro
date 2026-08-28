@@ -19,7 +19,7 @@ import re
 import sys
 import unicodedata
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from statistics import median
 
@@ -145,12 +145,25 @@ def station_distance_m(left: dict, right: dict) -> float | None:
 
 def read_weekday_services() -> set[str]:
     services = set()
-    for row in read_csv("calendar.txt"):
-        if all(row.get(day) == "1" for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]):
-            services.add(row["service_id"])
-    if not services:
+    calendar_path = GTFS / "calendar.txt"
+    if calendar_path.exists():
         for row in read_csv("calendar.txt"):
-            if any(row.get(day) == "1" for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]):
+            if all(row.get(day) == "1" for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]):
+                services.add(row["service_id"])
+        if not services:
+            for row in read_csv("calendar.txt"):
+                if any(row.get(day) == "1" for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]):
+                    services.add(row["service_id"])
+    else:
+        # Calendar-dates-only feeds are valid GTFS. Treat service IDs explicitly
+        # added on weekdays as representative for scheduled peak headways.
+        for row in read_csv("calendar_dates.txt"):
+            value = row.get("date") or ""
+            try:
+                service_day = datetime.strptime(value, "%Y%m%d").date()
+            except ValueError:
+                continue
+            if row.get("exception_type") == "1" and service_day.weekday() < 5:
                 services.add(row["service_id"])
     log(f"weekday service ids for peak headways: {len(services)}")
     return services
@@ -235,7 +248,11 @@ def read_stops() -> tuple[dict[str, str], dict[str, dict]]:
         lon = sum(c[1] for c in coords) / len(coords) if coords else None
         station_meta[station_id] = {
             "id": station_id,
-            "name": source.get("stop_name") or station_id,
+            "name": (
+                SOURCE_ADAPTER.normalize_station_name(source.get("stop_name") or station_id)
+                if hasattr(SOURCE_ADAPTER, "normalize_station_name")
+                else source.get("stop_name") or station_id
+            ),
             "lat": lat,
             "lon": lon,
         }
@@ -417,6 +434,8 @@ def choose_patterns(
     by_route = defaultdict(list)
     for key, count in pattern_counts.items():
         route_id, _direction_id, stations = key
+        if stations[-1] in CITY_CONFIG["network"].get("excludedPatternTerminiByRoute", {}).get(route_id, []):
+            continue
         if route_id in routes and len(stations) > 1:
             by_route[route_id].append((count, key))
 
@@ -547,6 +566,9 @@ def build_waits(
 
 def read_transfers(stop_to_station: dict[str, str], used_stations: set[str]) -> dict[str, dict[str, int]]:
     transfer_samples: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
+    if not (GTFS / "transfers.txt").exists():
+        log("transfers.txt absent; no raw inter-station transfers")
+        return {}
     for row in read_csv("transfers.txt"):
         from_station = stop_to_station.get(row.get("from_stop_id", ""), row.get("from_stop_id", ""))
         to_station = stop_to_station.get(row.get("to_stop_id", ""), row.get("to_stop_id", ""))
@@ -636,6 +658,9 @@ def read_route_transfers(
     route_transfers: dict[str, dict[str, dict[str, dict[str, int]]]] = defaultdict(
         lambda: defaultdict(lambda: defaultdict(dict))
     )
+    if not (GTFS / "transfers.txt").exists():
+        log("transfers.txt absent; no child-stop route-pair transfers")
+        return {}
     count = 0
     for row in read_csv("transfers.txt"):
         from_stop = row.get("from_stop_id", "")
@@ -1477,6 +1502,8 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
     stations = {station_id: all_station_meta[station_id] for station_id in sorted(used_stations)}
     build_station_services(stations, routes, directions)
     all_transfers = read_transfers(stop_to_station, set(stations))
+    if hasattr(SOURCE_ADAPTER, "augment_transfers"):
+        SOURCE_ADAPTER.augment_transfers(all_transfers, stations)
     transfers, excluded_transfers = filter_walking_transfers(all_transfers)
     canonical_station_ids, station_equivalents = build_station_equivalents(stations, transfers)
     for station_id, station in stations.items():

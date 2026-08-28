@@ -1,4 +1,4 @@
-const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago"]);
+const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc"]);
 const requestedCityId = new URLSearchParams(window.location.search).get("city");
 const CITY_ID = SUPPORTED_CITY_IDS.has(requestedCityId) ? requestedCityId : "paris";
 const CITY_DATA_URL = `./data/${CITY_ID}`;
@@ -197,7 +197,7 @@ function routeDisplayName(r) {
 }
 
 function routeChoiceLabel(r) {
-  if (CITY_ID === "london" || CITY_ID === "chicago") return routeDisplayName(r);
+  if (["london", "chicago", "washington-dc"].includes(CITY_ID)) return routeDisplayName(r);
   return `${modeName(r.mode)} ${r.label}`;
 }
 
@@ -2065,11 +2065,14 @@ function configureCityMap() {
     return;
   }
   const isChicago = CITY_ID === "chicago";
+  const isWashington = CITY_ID === "washington-dc";
   CITY_MAP = {
     width: 320,
     height: 220,
     bounds: isChicago
       ? { minLat: 41.70, maxLat: 42.08, minLon: -87.91, maxLon: -87.54 }
+      : isWashington
+        ? { minLat: 38.76, maxLat: 39.13, minLon: -77.50, maxLon: -76.83 }
       : { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
     outline: [],
     parks: [],
@@ -2077,12 +2080,14 @@ function configureCityMap() {
     waterbody: isChicago
       ? [[-87.595,41.70],[-87.600,41.76],[-87.612,41.82],[-87.625,41.88],[-87.613,41.94],[-87.600,42.01],[-87.592,42.08],[-87.51,42.08],[-87.51,41.70]]
       : [],
-    waterway: isChicago ? [] : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
+    waterway: isChicago ? [] : isWashington
+      ? [[-77.12,39.02],[-77.10,38.99],[-77.08,38.96],[-77.06,38.93],[-77.05,38.90],[-77.04,38.88],[-77.02,38.86],[-77.00,38.84],[-77.00,38.80]]
+      : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
   };
 }
 
 function fitCityMapToPuzzle() {
-  if (CITY_ID === "paris" || CITY_ID === "chicago") {
+  if (CITY_ID === "paris" || CITY_ID === "chicago" || CITY_ID === "washington-dc") {
     CITY_MAP.viewBounds = CITY_MAP.bounds;
     return;
   }
