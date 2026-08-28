@@ -2487,6 +2487,7 @@ function renderLineStep(message = "") {
   state.stage = "line";
   const options = boardingOptions();
   const walks = walkOptions();
+  const compactRouteChoices = ["chicago", "washington-dc"].includes(CITY_ID);
   boardShell(`
     <div class="step-title">
       <h2>Choose your next move</h2>
@@ -2501,9 +2502,9 @@ function renderLineStep(message = "") {
                 .map((option, index) => {
                   const r = route(option.routeId);
                   return `
-                    <button class="choice line-choice" data-line-index="${index}"${CITY_ID === "chicago" ? ` aria-label="Board ${escapeHtml(routeDisplayName(r))}"` : ""}>
+                    <button class="choice line-choice" data-line-index="${index}"${compactRouteChoices ? ` aria-label="Board ${escapeHtml(routeDisplayName(r))}"` : ""}>
                       ${lineChoiceMarker(option.routeId)}
-                      ${CITY_ID === "chicago" ? "" : `<span>
+                      ${compactRouteChoices ? "" : `<span>
                         <strong>${escapeHtml(routeChoiceLabel(r))}</strong>
                       </span>`}
                     </button>
