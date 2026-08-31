@@ -21,16 +21,30 @@ def require(condition: bool, message: str) -> None:
 def main() -> None:
     build_data.configure_city("london")
     network = json.loads((ROOT / "public" / "data" / "london" / "network.json").read_text(encoding="utf-8"))
+    require(
+        all(not station["name"].endswith(" (London)") for station in network["stations"].values()),
+        "redundant London station-name qualifier remains in generated data",
+    )
     audit = network["metadata"]["sourceAudit"]
-    require(len(network["routes"]) == 12, "expected 11 Tube lines plus Elizabeth line")
-    require(len(network["stations"]) == 315, "London station count changed")
+    require(len(network["routes"]) == 13, "expected 11 Tube lines plus Elizabeth and DLR")
+    require(len(network["stations"]) == 360, "London station count changed")
     require(audit["runtimeSources"].get("fallback", 0) == 0, "ride-time fallbacks remain")
     require(audit["elizabethJourneySegments"] == 84, "Elizabeth segment coverage changed")
     require("940GZZLUWIG" not in network["routes"]["metropolitan"]["branches"], "invalid branch reference")
     for direction_id in network["routes"]["metropolitan"]["branches"]:
         require("940GZZLUWIG" not in network["directions"][direction_id]["stations"], "Metropolitan must not stop at Willesden Green")
     require(network["routes"]["elizabeth"]["color"] == "#60399E", "Elizabeth colour changed")
+    require(network["routes"]["dlr"]["color"] == "#00A4A7", "DLR colour changed")
+    require(len(network["routes"]["dlr"]["branches"]) == 10, "expected ten directional DLR patterns")
     require(network["transfers"].get("940GZZLUPAC", {}).get("910GPADTLL") == 180, "Paddington interchange missing")
+    require(
+        network["routeTransfers"]["940GZZDLCAN"]["910GCANWHRF"]["dlr"]["elizabeth"] == 240,
+        "Canary Wharf DLR/Elizabeth interchange timing changed",
+    )
+    require(
+        network["routeTransfers"]["940GZZDLBNK"]["940GZZLUBNK"]["dlr"]["central"] == 180,
+        "Bank DLR/Tube interchange timing changed",
+    )
 
     hatton_cross = "940GZZLUHNX"
     piccadilly_labels = {
@@ -55,7 +69,7 @@ def main() -> None:
             require(all(frozenset((left, right)) in equivalent_pairs for left in station_ids for right in station_ids if left != right), f"unlinked duplicate {key[0]}: {station_ids}")
 
     waits = network["metadata"]["waitSecondsByRoute"]
-    for route_id, expected in {"victoria": 60, "central": 75, "circle": 300, "metropolitan": 135}.items():
+    for route_id, expected in {"victoria": 60, "central": 75, "circle": 300, "metropolitan": 135, "dlr": 150}.items():
         require(waits[route_id] == expected, f"{route_id} expected wait changed: {waits[route_id]}s")
     require(len(set(waits[r] for r in network["routes"] if r != "elizabeth")) > 3, "Tube waits look over-collapsed")
 
@@ -67,6 +81,14 @@ def main() -> None:
     require(
         router.combined_wait_seconds("circle:1", "circle", "940GZZLUHSC", "940GZZLUALD") == 300,
         "Circle-only travel beyond Liverpool Street must keep the Circle wait",
+    )
+    require(
+        router.combined_wait_seconds("dlr:5", "dlr", "940GZZDLBNK", "940GZZDLWFE") == 75,
+        "DLR Bank trunk should combine Lewisham and Woolwich services",
+    )
+    require(
+        router.combined_wait_seconds("dlr:5", "dlr", "940GZZDLBNK", "940GZZDLCAN") == 150,
+        "DLR Canary Wharf ride must keep the Lewisham-pattern wait",
     )
     checked = []
 
@@ -111,6 +133,10 @@ def main() -> None:
         ("Piccadilly Heathrow 5", "940GZZLUHR5", "940GZZLUHNX", ["Piccadilly"]),
         ("Victoria termini", "940GZZLUBXN", "940GZZLUWWL", ["Victoria"]),
         ("Waterloo & City", "940GZZLUWLO", "940GZZLUBNK", ["Waterloo & City"], 330),
+        ("DLR Bank to Lewisham", "940GZZDLBNK", "940GZZDLLEW", ["DLR"]),
+        ("DLR Beckton to Tower Gateway", "940GZZDLBEC", "940GZZDLTWG", ["DLR"]),
+        ("DLR Woolwich to Stratford International", "940GZZDLWLA", "940GZZDLSIT", ["DLR"]),
+        ("DLR Stratford to Canary Wharf", "940GZZDLSTD", "940GZZDLCAN", ["DLR"]),
         ("Elizabeth Reading", "910GRDNGSTN", "910GPADTON", ["Elizabeth line"]),
         ("Elizabeth Shenfield", "910GSHENFLD", "910GLIVST", ["Elizabeth line"]),
         ("Elizabeth Abbey Wood", "910GABWDXR", "910GPADTLL", ["Elizabeth line"]),

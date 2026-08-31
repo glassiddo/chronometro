@@ -308,6 +308,20 @@ def verify_route_continuations(data: dict) -> None:
     require(leg["transferSec"] == 0, f"7bis continuation must not charge transfer, got {leg['transferSec']}")
     require(route["transferSec"] == 0, f"Place des Fêtes -> Danube total transfer should be 0, got {route['transferSec']}")
 
+    # Montparnasse has duplicate canonical records.  Players can board at either
+    # record for free, so the stored fastest route must search from both too.
+    fastest = router.fastest_path("ITOAUTO97217", "ITOAUTO79064")
+    route = router.describe_path(
+        *fastest,
+        start_station="ITOAUTO97217",
+        end_station="ITOAUTO79064",
+    ) if fastest else None
+    require(route is not None, "Montparnasse Bienvenue -> Jacques Bonsergent should be routable")
+    require(
+        route["totalSec"] == 971,
+        f"equivalent Montparnasse start should produce the 971s route, got {route['totalSec']}",
+    )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Verify a configured Chronométro city bundle.")
@@ -338,6 +352,18 @@ def main() -> None:
     app = APP.read_text(encoding="utf-8")
     build = BUILD.read_text(encoding="utf-8")
     require("waitSecondsByDirection" in app and "waitSecondsByRoute" in app, "frontend does not use derived waits")
+    if CITY_ID == "paris":
+        require(
+            data.get("interchangeableDirectionRoutes") == ["15314"]
+            and "interchangeableDirectionRoutes" in app,
+            "shared RER B trunk does not treat its destination patterns as interchangeable",
+        )
+        labels = {direction["label"] for direction in data["directions"].values() if direction["routeId"] == "15314"}
+        require(
+            "Aéroport CDG 1 (Terminal 3)" in labels
+            and "Aéroport CDG 2 (Terminal 2, TGV)" in labels,
+            f"RER B airport labels are not harmonized: {sorted(labels)}",
+        )
     require("routeTransfers" in app and "transferFallback" in app, "frontend does not use route transfer fallback rules")
     require("formatLegBreakdown" in app and "rideSec" in app, "frontend does not expose timing breakdowns")
     require(

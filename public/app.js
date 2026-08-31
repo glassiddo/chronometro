@@ -8,7 +8,7 @@ const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
-const DATA_REVISION = "20260826-year-end";
+const DATA_REVISION = "20260831-london-dlr-preview-rer-b-fixes";
 
 const state = {
   data: null,
@@ -41,6 +41,7 @@ function stationDisplayName(stationId) {
   if (CITY_ID !== "london") return name;
   return name
     .replace(/\s*\([^)]*Line[^)]*\)/gi, "")
+    .replace(/\s*\(London\)$/i, "")
     .replace(/-Underground$/i, "")
     .replace(/^London (?=(?:Paddington|Liverpool Street)$)/i, "")
     .trim();
@@ -2721,7 +2722,16 @@ function runtimeBetween(dirId, fromStation, toStation) {
 }
 
 function bestEquivalentDirectionCandidate(selected, toStation) {
-  const candidates = selected.directionCandidates || [];
+  const candidates = [...(selected.directionCandidates || [])];
+  if ((state.data.interchangeableDirectionRoutes || []).includes(selected.routeId)) {
+    Object.values(state.data.directions).forEach((candidateDirection) => {
+      if (candidateDirection.routeId !== selected.routeId) return;
+      const boardStation = selected.boardStation;
+      if (!Number.isFinite(runtimeBetween(candidateDirection.id, boardStation, toStation))) return;
+      if (candidates.some((candidate) => candidate.dirId === candidateDirection.id && candidate.boardStation === boardStation)) return;
+      candidates.push({ dirId: candidateDirection.id, boardStation, walkSec: 0 });
+    });
+  }
   let best = null;
   candidates.forEach((candidate) => {
     const runSec = runtimeBetween(candidate.dirId, candidate.boardStation, toStation);

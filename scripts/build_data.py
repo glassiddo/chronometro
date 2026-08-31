@@ -840,7 +840,10 @@ class Router:
             ),
             None,
         )
-        if not group:
+        combine_same_route = route_id in CITY_CONFIG["network"].get(
+            "combinePatternsWithinRoutes", []
+        )
+        if not group and not combine_same_route:
             return int(wait)
         direction = self.directions[direction_id]
         try:
@@ -849,10 +852,19 @@ class Router:
         except ValueError:
             return int(wait)
         ride_stations = direction["stations"][start_index : end_index + 1]
-        waits_by_route = {route_id: int(wait)}
+        waits_by_service = {f"{route_id}:{direction_id}": int(wait)}
         for candidate in self.directions.values():
             candidate_route_id = candidate["routeId"]
-            if candidate_route_id == route_id or candidate_route_id not in group:
+            same_route_pattern = (
+                combine_same_route
+                and candidate_route_id == route_id
+                and candidate["id"] != direction_id
+            )
+            shared_route = (
+                candidate_route_id != route_id
+                and candidate_route_id in (group or [])
+            )
+            if not same_route_pattern and not shared_route:
                 continue
             stations = candidate["stations"]
             width = len(ride_stations)
@@ -862,13 +874,18 @@ class Router:
                     candidate_route_id,
                     self.routes[candidate_route_id]["mode"],
                 )
-                waits_by_route[candidate_route_id] = min(
-                    candidate_wait,
-                    waits_by_route.get(candidate_route_id, candidate_wait),
+                service_key = (
+                    f"{candidate_route_id}:{candidate['id']}"
+                    if same_route_pattern
+                    else candidate_route_id
                 )
-        if len(waits_by_route) == 1:
+                waits_by_service[service_key] = min(
+                    candidate_wait,
+                    waits_by_service.get(service_key, candidate_wait),
+                )
+        if len(waits_by_service) == 1:
             return int(wait)
-        return round(1 / sum(1 / candidate_wait for candidate_wait in waits_by_route.values()))
+        return round(1 / sum(1 / candidate_wait for candidate_wait in waits_by_service.values()))
 
     def transfer_walk(
         self,
@@ -996,11 +1013,19 @@ class Router:
         target = "__end__"
         extra_edges: dict[str, list[tuple[str, int]]] = defaultdict(list)
         start_route_ids = self.boardable_route_ids(start_station)
-        for node_id in self.station_nodes.get(start_station, []):
-            if not self.is_boardable_node(node_id):
-                continue
-            node = self.nodes[node_id]
-            extra_edges[source].append((node_id, self.wait_seconds(node["dirId"], node["routeId"], node["mode"])))
+        # A puzzle starts at the named station complex, not at one particular
+        # duplicate GTFS record within it.  The frontend already lets players
+        # board from any canonically equivalent record without charging a walk;
+        # give the route search the same choices so its stored optimum cannot be
+        # slower than a route the player is allowed to select.
+        for equivalent_start in self.equivalent_station_ids(start_station):
+            for node_id in self.station_nodes.get(equivalent_start, []):
+                if not self.is_boardable_node(node_id):
+                    continue
+                node = self.nodes[node_id]
+                extra_edges[source].append(
+                    (node_id, self.wait_seconds(node["dirId"], node["routeId"], node["mode"]))
+                )
         start_canonical = self.canonical_station_id(start_station)
         for walk_station, walk_seconds in self.transfers.get(start_station, {}).items():
             if self.canonical_station_id(walk_station) == start_canonical:
@@ -1150,7 +1175,10 @@ class Router:
         current_ride = None
 
         first_station = self.nodes[route_nodes[0]]["stationId"]
-        if start_station is not None and first_station != start_station:
+        if (
+            start_station is not None
+            and self.canonical_station_id(first_station) != self.canonical_station_id(start_station)
+        ):
             initial_walk = self.transfers.get(start_station, {}).get(first_station)
             if initial_walk is None:
                 return None
@@ -1550,6 +1578,7 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
         "directions": directions,
         "routeContinuations": build_route_continuations(directions),
         "sharedServiceGroups": CITY_CONFIG["network"].get("sharedServiceGroups", []),
+        "interchangeableDirectionRoutes": CITY_CONFIG["network"].get("interchangeableDirectionRoutes", []),
         "stations": stations,
         "canonicalStationIds": canonical_station_ids,
         "stationEquivalents": station_equivalents,
@@ -1613,6 +1642,7 @@ def assemble_normalized_network(source: dict) -> tuple[dict, Router, list[str], 
         "directions": directions,
         "routeContinuations": source.get("routeContinuations", []),
         "sharedServiceGroups": CITY_CONFIG["network"].get("sharedServiceGroups", []),
+        "interchangeableDirectionRoutes": CITY_CONFIG["network"].get("interchangeableDirectionRoutes", []),
         "stations": stations,
         "canonicalStationIds": canonical_station_ids,
         "stationEquivalents": station_equivalents,

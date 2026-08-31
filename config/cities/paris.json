@@ -42,6 +42,7 @@
   "network": {
     "maximumDirectionsPerRoute": 18,
     "shortTurnModes": ["rer"],
+    "interchangeableDirectionRoutes": ["15314"],
     "routeContinuations": [{"routeId": "8567", "stationId": "PARIS166100"}],
     "walkingTransfers": {
       "allowAll": false,

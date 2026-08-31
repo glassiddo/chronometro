@@ -15,6 +15,7 @@ LINE_COLOURS = {
     "central": ("#DC241F", "#FFFFFF"),
     "circle": ("#FFC80A", "#000000"),
     "district": ("#007D32", "#FFFFFF"),
+    "dlr": ("#00A4A7", "#000000"),
     "elizabeth": ("#60399E", "#FFFFFF"),
     "hammersmith-city": ("#F589A6", "#000000"),
     "jubilee": ("#838D93", "#000000"),
@@ -31,7 +32,7 @@ def route_label(row: dict[str, str]) -> str:
 
 
 def canonical_mode(row: dict[str, str]) -> str | None:
-    return {"tube": "tube", "elizabeth-line": "elizabeth"}.get(row.get("modeName"))
+    return {"tube": "tube", "elizabeth-line": "elizabeth", "dlr": "dlr"}.get(row.get("modeName"))
 
 
 def direction_display_label(mode: str, headsign: str, terminal_name: str) -> str:
@@ -39,7 +40,12 @@ def direction_display_label(mode: str, headsign: str, terminal_name: str) -> str
 
 
 def route_type_mapping_metadata() -> dict[str, str]:
-    return {"tube": "included", "elizabeth-line": "included", "dlr/overground/tram": "excluded"}
+    return {
+        "tube": "included",
+        "elizabeth-line": "included",
+        "dlr": "included",
+        "overground/tram": "excluded",
+    }
 
 
 def load_json(path: Path):
@@ -47,8 +53,9 @@ def load_json(path: Path):
 
 
 def clean_station_name(value: str) -> str:
-    value = re.sub(r"\s+(Underground|Rail) Station$", "", value or "")
+    value = re.sub(r"\s+(Underground|Rail|DLR) Station$", "", value or "")
     value = re.sub(r"\s*\((?:H\s*&\s*C|Circle) Line\)(?:-Underground)?$", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"\s*\(London\)$", "", value, flags=re.IGNORECASE)
     value = re.sub(r"-Underground$", "", value, flags=re.IGNORECASE)
     value = re.sub(r"^London (?=(?:Paddington|Liverpool Street)$)", "", value, flags=re.IGNORECASE)
     return value.strip()
@@ -67,19 +74,28 @@ def feed_metadata(root: Path, config: dict) -> dict[str, str]:
     }
 
 
-def weekday_departures(payload: dict) -> list[int]:
+def schedule_departures(schedules: list[dict], interval_id: int | None = None) -> list[int]:
     departures = []
-    for route in payload.get("timetable", {}).get("routes", []):
-        for schedule in route.get("schedules", []):
-            name = (schedule.get("name") or "").casefold()
-            if "monday" not in name and name != "friday":
+    for schedule in schedules:
+        name = (schedule.get("name") or "").casefold()
+        if "monday" not in name and name != "friday":
+            continue
+        for journey in schedule.get("knownJourneys", []):
+            if interval_id is not None and journey.get("intervalId") != interval_id:
                 continue
-            for journey in schedule.get("knownJourneys", []):
-                try:
-                    departures.append(int(journey["hour"]) * 3600 + int(journey["minute"]) * 60)
-                except (KeyError, TypeError, ValueError):
-                    continue
+            try:
+                departures.append(int(journey["hour"]) * 3600 + int(journey["minute"]) * 60)
+            except (KeyError, TypeError, ValueError):
+                continue
     return departures
+
+
+def weekday_departures(payload: dict) -> list[int]:
+    return [
+        departure
+        for route in payload.get("timetable", {}).get("routes", [])
+        for departure in schedule_departures(route.get("schedules", []))
+    ]
 
 
 def peak_headways(departures: list[int], config: dict) -> list[int]:
@@ -102,13 +118,14 @@ def wait_from_headways(headways: list[int], mode: str, config: dict) -> int | No
     )
 
 
-def tube_timing(source: Path, line_modes: dict[str, str], config: dict):
+def scheduled_timing(source: Path, line_modes: dict[str, str], config: dict):
     segments: dict[tuple[str, str, str, str], set[int]] = defaultdict(set)
     headways: dict[tuple[str, str], list[int]] = defaultdict(list)
+    pattern_headways: dict[tuple[str, str, tuple[str, ...]], list[int]] = defaultdict(list)
     usable_files = 0
     for path in source.glob("lines/*/timetables/*.json"):
         line_id = path.parent.parent.name
-        if line_modes.get(line_id) != "tube":
+        if line_modes.get(line_id) not in {"tube", "dlr"}:
             continue
         payload = load_json(path)
         routes = payload.get("timetable", {}).get("routes", [])
@@ -123,6 +140,9 @@ def tube_timing(source: Path, line_modes: dict[str, str], config: dict):
         headways[(line_id, direction)].extend(peak_headways(weekday_departures(payload), config))
         for route in routes:
             for interval_set in route.get("stationIntervals", []):
+                route_headways = peak_headways(
+                    schedule_departures(route.get("schedules", []), interval_set.get("id")), config
+                )
                 ids = [departure_id] + [item.get("stopId") for item in interval_set.get("intervals", [])]
                 minutes = [0.0] + [item.get("timeToArrival") for item in interval_set.get("intervals", [])]
                 collapsed = []
@@ -137,7 +157,10 @@ def tube_timing(source: Path, line_modes: dict[str, str], config: dict):
                     runtime = round((right_minute - left_minute) * 60)
                     if runtime > 0:
                         segments[(line_id, direction, left, right)].add(runtime)
-    return segments, headways, usable_files
+                if len(collapsed) >= 2 and route_headways:
+                    path = tuple(station_id for station_id, _ in collapsed)
+                    pattern_headways[(line_id, direction, path)].extend(route_headways)
+    return segments, headways, pattern_headways, usable_files
 
 
 def elizabeth_timing(source: Path) -> dict[tuple[str, str], int]:
@@ -195,7 +218,9 @@ def build_normalized_source(root: Path, config: dict) -> dict:
     line_rows = [row for row in line_rows if line_modes[row["id"]]]
     line_ids = [row["id"] for row in line_rows]
     stations, hubs = source_station_records(source, line_ids)
-    tube_segments, headways, usable_timetable_files = tube_timing(source, line_modes, config)
+    scheduled_segments, headways, pattern_headways, usable_timetable_files = scheduled_timing(
+        source, line_modes, config
+    )
     elizabeth_segments = elizabeth_timing(source)
 
     routes = {}
@@ -213,6 +238,7 @@ def build_normalized_source(root: Path, config: dict) -> dict:
         }
 
     directions = {}
+    direction_pattern_headways: dict[str, list[int]] = {}
     runtime_sources = defaultdict(int)
     skipped_by_line = config["network"].get("skippedStopsByLine", {})
     for row in line_rows:
@@ -237,11 +263,11 @@ def build_normalized_source(root: Path, config: dict) -> dict:
                         runtime = elizabeth_segments.get((left, right))
                         source_kind = "journey-planner" if runtime else "fallback"
                     else:
-                        values = tube_segments.get((line_id, direction_name, left, right), set())
+                        values = scheduled_segments.get((line_id, direction_name, left, right), set())
                         source_kind = "direct-timetable"
                         if not values:
                             opposite = "outbound" if direction_name == "inbound" else "inbound"
-                            values = tube_segments.get((line_id, opposite, right, left), set())
+                            values = scheduled_segments.get((line_id, opposite, right, left), set())
                             source_kind = "reverse-timetable"
                         runtime = round(median(values)) if values else None
                         if runtime is None:
@@ -261,6 +287,10 @@ def build_normalized_source(root: Path, config: dict) -> dict:
                     "runtimes": runtimes,
                     "stopPattern": {"kind": "scheduled", "servesEveryListedStop": True},
                 }
+                if mode == "dlr":
+                    direction_pattern_headways[direction_id] = pattern_headways.get(
+                        (line_id, direction_name, station_ids), []
+                    )
                 index += 1
 
     grouped = defaultdict(list)
@@ -278,12 +308,44 @@ def build_normalized_source(root: Path, config: dict) -> dict:
                 if left != right:
                     transfers[left][right] = hub_transfer
 
+    # Preserve the established three-minute London hub default, while giving
+    # DLR changes the agreed mode-pair timings. These overrides apply only to
+    # station records that TfL explicitly groups into the same hub.
+    station_routes: dict[str, set[str]] = defaultdict(set)
+    for direction in directions.values():
+        for station_id in direction["stations"]:
+            station_routes[station_id].add(direction["routeId"])
+    route_transfers: dict[str, dict[str, dict[str, dict[str, int]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(dict))
+    )
+    transfer_defaults = config["timing"]["transferDefaultsSeconds"]
+    for ids in station_equivalents:
+        for left in ids:
+            for right in ids:
+                if left == right:
+                    continue
+                for from_route in station_routes[left]:
+                    for to_route in station_routes[right]:
+                        from_mode = routes[from_route]["mode"]
+                        to_mode = routes[to_route]["mode"]
+                        if "dlr" not in {from_mode, to_mode}:
+                            continue
+                        pair_key = "_".join(sorted((from_mode, to_mode)))
+                        seconds = transfer_defaults.get(
+                            "same_mode" if from_mode == to_mode else pair_key,
+                            transfer_defaults["fallback"],
+                        )
+                        route_transfers[left][right][from_route][to_route] = seconds
+
     wait_by_direction = {}
     wait_by_route = {}
     for direction_id, direction in directions.items():
         route_id = direction["routeId"]
         mode = routes[route_id]["mode"]
-        wait = wait_from_headways(headways.get((route_id, direction["gtfsDirectionId"]), []), mode, config)
+        wait_inputs = direction_pattern_headways.get(direction_id) or headways.get(
+            (route_id, direction["gtfsDirectionId"]), []
+        )
+        wait = wait_from_headways(wait_inputs, mode, config)
         if wait is not None:
             wait_by_direction[direction_id] = wait
     for route_id, route in routes.items():
@@ -310,7 +372,13 @@ def build_normalized_source(root: Path, config: dict) -> dict:
         "directions": directions,
         "stations": stations,
         "transfers": {left: dict(rights) for left, rights in transfers.items()},
-        "routeTransfers": {},
+        "routeTransfers": {
+            left: {
+                right: {from_route: dict(to_routes) for from_route, to_routes in from_routes.items()}
+                for right, from_routes in destinations.items()
+            }
+            for left, destinations in route_transfers.items()
+        },
         "canonicalStationIds": canonical_station_ids,
         "stationEquivalents": station_equivalents,
         "waitSecondsByDirection": wait_by_direction,

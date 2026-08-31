@@ -18,11 +18,11 @@ The browser loads a normalized city network and five puzzles for the selected da
 
 ### London
 
-- All 11 Underground lines and the Elizabeth line
+- All 11 Underground lines, the Elizabeth line, and the complete DLR network
 - Daily puzzles from 25 August through 31 December 2026
-- Excludes London Overground, DLR, trams, buses, and National Rail
+- Excludes London Overground, trams, buses, and National Rail
 
-London branch paths are modeled separately. Circle and H&C frequencies are combined only when either service can complete the entire selected ride. Metropolitan fast and semi-fast service distinctions are not currently modeled.
+London branch paths are modeled separately. Circle and H&C frequencies are combined only when either service can complete the entire selected ride. DLR's five regular terminal-to-terminal service patterns remain distinct, with timetable-derived runtimes and expected waits. Metropolitan fast and semi-fast service distinctions are not currently modeled.
 
 ### Chicago
 
@@ -56,10 +56,10 @@ Paris uses an ITO World modified GTFS export derived from Île-de-France Mobilit
 
 London uses a saved Transport for London Unified API snapshot:
 
-- Underground routes, stopping patterns, departures, and cumulative timetable intervals come from TfL line and timetable endpoints
+- Underground and DLR routes, stopping patterns, departures, and cumulative timetable intervals come from TfL line and timetable endpoints
 - Elizabeth line runtimes come from saved Journey Planner responses because timetable data was unavailable for that line
-- expected Underground waits use half the median weekday 07:00–10:00 departure gap; Elizabeth uses a 2½-minute fallback
-- ordinary same-station Underground changes use two minutes; linked records within a larger TfL hub use three minutes
+- expected Underground and DLR waits use half the median weekday 07:00–10:00 departure gap where the timetable payload supports it; Elizabeth uses a 2½-minute fallback
+- ordinary same-mode changes use two minutes; DLR–Underground hub changes use three minutes and DLR–Elizabeth hub changes use four minutes
 
 ### Chicago
 
@@ -146,7 +146,7 @@ To refresh Washington, register for a WMATA developer key, download and extract 
 
 ## Timing limitations
 
-The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Branch-specific wait variation, route-pair-specific interchange times, and some service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. November and December puzzles continue to use the fixed representative snapshot even though its source calendar expires on 31 October 2026.
+The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Some branch-specific wait variation, route-pair-specific interchange times, and service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. November and December puzzles continue to use the fixed representative snapshot even though its source calendar expires on 31 October 2026.
 
 ## Attribution
 

@@ -18,7 +18,8 @@
   },
   "modes": {
     "tube": {"label": "Tube", "defaultWaitSeconds": 120, "maximumWaitSeconds": 360},
-    "elizabeth": {"label": "Elizabeth line", "defaultWaitSeconds": 150, "maximumWaitSeconds": 600}
+    "elizabeth": {"label": "Elizabeth line", "defaultWaitSeconds": 150, "maximumWaitSeconds": 600},
+    "dlr": {"label": "DLR", "defaultWaitSeconds": 150, "maximumWaitSeconds": 300}
   },
   "timing": {
     "peakStartSeconds": 25200,
@@ -26,6 +27,8 @@
     "minimumWaitSeconds": 30,
     "transferDefaultsSeconds": {
       "same_mode": 120,
+      "dlr_elizabeth": 240,
+      "dlr_tube": 180,
       "elizabeth_tube": 240,
       "fallback": 180
     },
@@ -37,6 +40,7 @@
     "maximumDirectionsPerRoute": 24,
     "shortTurnModes": [],
     "allowSameRouteStartWalk": true,
+    "combinePatternsWithinRoutes": ["dlr"],
     "sharedServiceGroups": [{"routeIds": ["circle", "hammersmith-city"]}],
     "routeContinuations": [],
     "skippedStopsByLine": {"metropolitan": ["940GZZLUWIG"]}
@@ -48,12 +52,12 @@
     "exampleCount": 100,
     "minimumRouteDistanceMetres": 2500,
     "minimumEndpointDistanceMetres": 2000,
-    "endpointModes": ["tube"],
+    "endpointModes": ["tube", "dlr"],
     "boundedEndpointModes": ["elizabeth"],
     "bounds": {"minLat": 51.35, "maxLat": 51.65, "minLon": -0.52, "maxLon": 0.25},
     "excludeSameComplexEndpoints": true,
     "requireInterchangeEndpoints": false,
-    "seedNamespace": "chronometro-london"
+    "seedNamespace": "chronometro-london-dlr-v1"
   },
   "paths": {
     "network": "public/data/london/network.json",
