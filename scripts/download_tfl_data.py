@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "gouv_london_tfl-export"
 BASE_URL = "https://api.tfl.gov.uk"
-DEFAULT_MODES = ("tube", "elizabeth-line")
+DEFAULT_MODES = ("tube", "elizabeth-line", "dlr")
 
 
 def read_local_env() -> dict[str, str]:

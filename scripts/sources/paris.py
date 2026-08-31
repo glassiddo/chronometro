@@ -4,7 +4,21 @@ This module contains source-feed semantics only. The normalized network,
 routing, timing and puzzle generation remain in the shared builder.
 """
 
+import re
+
 RER_LABELS = {"A", "B", "C", "D", "E"}
+
+
+def normalize_station_name(value: str) -> str:
+    """Keep the two CDG RER B terminal names parallel and unambiguous."""
+    name = (value or "").strip()
+    name = re.sub(
+        r"^Aéroport CDG\s*\(Terminal 2\)\s*-\s*TGV$",
+        "Aéroport CDG 2 (Terminal 2, TGV)",
+        name,
+        flags=re.IGNORECASE,
+    )
+    return name
 
 
 def route_label(row: dict[str, str]) -> str:
