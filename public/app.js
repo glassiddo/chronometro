@@ -1,4 +1,4 @@
-const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc"]);
+const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc", "boston"]);
 const requestedCityId = new URLSearchParams(window.location.search).get("city");
 const CITY_ID = SUPPORTED_CITY_IDS.has(requestedCityId) ? requestedCityId : "paris";
 const CITY_DATA_URL = `./data/${CITY_ID}`;
@@ -197,7 +197,7 @@ function routeDisplayName(r) {
 }
 
 function routeChoiceLabel(r) {
-  if (["london", "chicago", "washington-dc"].includes(CITY_ID)) return routeDisplayName(r);
+  if (["london", "chicago", "washington-dc", "boston"].includes(CITY_ID)) return routeDisplayName(r);
   return `${modeName(r.mode)} ${r.label}`;
 }
 
@@ -2066,10 +2066,13 @@ function configureCityMap() {
   }
   const isChicago = CITY_ID === "chicago";
   const isWashington = CITY_ID === "washington-dc";
+  const isBoston = CITY_ID === "boston";
   CITY_MAP = {
     width: 320,
     height: 220,
-    bounds: isChicago
+    bounds: isBoston
+      ? { minLat: 42.20, maxLat: 42.51, minLon: -71.30, maxLon: -70.98 }
+      : isChicago
       ? { minLat: 41.70, maxLat: 42.08, minLon: -87.91, maxLon: -87.54 }
       : isWashington
         ? { minLat: 38.76, maxLat: 39.13, minLon: -77.50, maxLon: -76.83 }
@@ -2077,17 +2080,32 @@ function configureCityMap() {
     outline: [],
     parks: [],
     airport: null,
-    waterbody: isChicago
+    waterbodies: isBoston ? [
+      // Inner Boston Harbor, between downtown and East Boston.
+      [[-71.060,42.374],[-71.047,42.378],[-71.030,42.372],[-71.025,42.360],[-71.039,42.350],[-71.054,42.351],[-71.061,42.360]],
+      // Chelsea Creek and the lower Mystic, kept north of East Boston.
+      [[-71.087,42.397],[-71.065,42.402],[-71.040,42.397],[-71.025,42.386],[-71.038,42.379],[-71.061,42.386],[-71.080,42.385]],
+      // Dorchester Bay, east of the Red Line's south-shore corridor.
+      [[-71.044,42.337],[-71.020,42.343],[-70.995,42.331],[-70.985,42.300],[-71.004,42.280],[-71.025,42.292],[-71.035,42.316]],
+      // Two restrained harbor-island cues.
+      [[-71.025,42.352],[-71.019,42.355],[-71.014,42.351],[-71.019,42.347]],
+      [[-71.012,42.337],[-71.006,42.340],[-71.001,42.336],[-71.006,42.332]]
+    ] : [],
+    waterbody: isBoston
+      ? []
+      : isChicago
       ? [[-87.595,41.70],[-87.600,41.76],[-87.612,41.82],[-87.625,41.88],[-87.613,41.94],[-87.600,42.01],[-87.592,42.08],[-87.51,42.08],[-87.51,41.70]]
       : [],
-    waterway: isChicago ? [] : isWashington
+    waterway: isBoston
+      ? [[-71.22,42.37],[-71.16,42.37],[-71.12,42.365],[-71.09,42.367],[-71.06,42.37],[-71.04,42.375]]
+      : isChicago ? [] : isWashington
       ? [[-77.12,39.02],[-77.10,38.99],[-77.08,38.96],[-77.06,38.93],[-77.05,38.90],[-77.04,38.88],[-77.02,38.86],[-77.00,38.84],[-77.00,38.80]]
       : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
   };
 }
 
 function fitCityMapToPuzzle() {
-  if (CITY_ID === "paris" || CITY_ID === "chicago" || CITY_ID === "washington-dc") {
+  if (["paris", "chicago", "washington-dc", "boston"].includes(CITY_ID)) {
     CITY_MAP.viewBounds = CITY_MAP.bounds;
     return;
   }
@@ -2219,6 +2237,7 @@ function orientationMapMarkup() {
         ${CITY_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
         ${CITY_MAP.airport ? `<path class="map-airport" d="${mapCurvePath(CITY_MAP.airport, true)}"></path>` : ""}
         ${CITY_MAP.outline.length ? `<path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>` : ""}
+        ${(CITY_MAP.waterbodies || []).map((body) => `<path class="waterbody" d="${mapCurvePath(body, true)}"></path>`).join("")}
         ${CITY_MAP.waterbody?.length ? `<path class="waterbody" d="${mapCurvePath(CITY_MAP.waterbody, true)}"></path>` : ""}
         ${CITY_MAP.waterway.length ? `<path class="waterway" d="${mapCurvePath(CITY_MAP.waterway)}"></path>` : ""}
         ${networkContextMapMarkup()}
@@ -2487,7 +2506,7 @@ function renderLineStep(message = "") {
   state.stage = "line";
   const options = boardingOptions();
   const walks = walkOptions();
-  const compactRouteChoices = ["chicago", "washington-dc"].includes(CITY_ID);
+  const compactRouteChoices = ["chicago", "washington-dc", "boston"].includes(CITY_ID);
   boardShell(`
     <div class="step-title">
       <h2>Choose your next move</h2>

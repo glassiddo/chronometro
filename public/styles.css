@@ -468,6 +468,24 @@ h1 {
   border-color: #9eb9c8;
 }
 
+[data-city="boston"] .orientation-map { border-color: #9eb9c8; }
+[data-city="boston"] .waterway { stroke-width: 3; }
+[data-city="boston"] .waterbody { fill: #b9ddec; stroke: #83b8d2; stroke-width: 1; }
+.map-network-context--boston { opacity: .48; }
+
+[data-city="boston"] .station-lines .line-badge {
+  flex-basis: auto; inline-size: auto; width: auto; min-width: 38px; height: 23px;
+  padding: 0 7px; font-size: 9px; white-space: nowrap;
+}
+[data-city="boston"] .line-choice {
+  grid-template-columns: 1fr; justify-items: center; justify-self: start; width: auto;
+  min-height: 0; padding: 2px; border: 0; background: transparent; box-shadow: none;
+}
+[data-city="boston"] .line-choice-grid { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; }
+[data-city="boston"] .line-choice .line-badge { min-width: 76px; width: auto; height: 36px; padding-inline: 12px; font-size: 14px; }
+[data-city="boston"] .line-choice:hover,
+[data-city="boston"] .line-choice:focus-visible { background: transparent; box-shadow: none; }
+
 [data-city="washington-dc"] .waterway {
   stroke-width: 3.25;
 }
