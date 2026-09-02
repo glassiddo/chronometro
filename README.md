@@ -2,7 +2,7 @@
 
 <img width="935" height="622" alt="image" src="https://github.com/user-attachments/assets/b7decbbe-b953-4313-adb7-9672a4e81325" />
 
-Chronométro is a daily transit-route puzzle for Paris, London, Chicago, and Washington, DC. Players build a route between two stations and score up to 100 points according to its modeled journey time relative to the fastest stored route.
+Chronométro is a daily transit-route puzzle for Paris, London, Chicago, Washington, DC, and Berlin. Players build a route between two stations and score up to 100 points according to its modeled journey time relative to the fastest stored route.
 
 Play at [chronometro.cc](https://chronometro.cc/).
 
@@ -41,6 +41,15 @@ The Loop and Green branches come from complete scheduled GTFS trip patterns. Pur
 - Daily puzzles from 29 August through 31 December 2026
 
 Complete scheduled `stop_times.txt` patterns preserve the terminal branches, shared Blue/Orange/Silver, Blue/Yellow, and Green/Yellow infrastructure, and Silver Line Phase 2 through Dulles Airport to Ashburn. A temporary Silver-to-New-Carrollton pattern in this snapshot is excluded from playable topology.
+
+### Berlin
+
+- All nine regular U-Bahn lines: U1–U9
+- 170 playable VBB parent stations in the selected snapshot
+- Excludes temporary U12 service, S-Bahn, trams, buses, ferries, regional rail, and long-distance rail
+- Daily puzzles from 5 through 30 September 2026
+
+Complete scheduled GTFS trip patterns supply the regular U1–U9 topology. The pinned September snapshot reflects the scheduled U6 closure north of Kurt-Schumacher-Platz; replacement buses are excluded.
 
 ## Data sources
 
@@ -85,6 +94,18 @@ Washington uses WMATA's official rail-only static GTFS package:
 
 Station IDs are WMATA parent-station IDs, so child platforms, entrances, direction records, and pathways never become playable stations or proximity-based equivalences. Metro Center, Gallery Place, L'Enfant Plaza, Fort Totten, Rosslyn, Pentagon, Stadium–Armory, East Falls Church, and King St–Old Town interchange through their shared parent station and scheduled services. Farragut North and Farragut West remain distinct stations but have WMATA's documented Farragut Crossing in both directions, modeled as a five-minute walk; no other nearby stations are joined. Later puzzles use this deterministic fixed snapshot and do not represent future service changes.
 
+### Berlin
+
+Berlin uses the official VBB static GTFS package:
+
+- feed: `https://unternehmen.vbb.de/gtfs`
+- snapshot downloaded 2 September 2026
+- calendar validity represented by the selected records: 1 September through 12 December 2026
+- weekday 07:00–10:00 departures supply expected waits
+- consecutive `stop_times.txt` values supply ride times; ordinary same-station changes use three minutes
+
+VBB publishes all Berlin and Brandenburg transport in one feed. The adapter requires BVG agency ID `796`, extended route type `400`, and one of the exact U1–U9 labels. Temporary U12 and every non-U-Bahn mode are excluded. Playable stations normalize through explicit GTFS `parent_station`; no geographic-proximity transfers are added.
+
 No city uses live service status, disruptions, closures, fares, accessibility, crowding, or real-time departure information.
 
 ## Repository layout
@@ -94,6 +115,7 @@ No city uses live service status, disruptions, closures, fares, accessibility, c
 - `public/data/london/` — London network, examples, and daily puzzles
 - `public/data/chicago/` — Chicago network, examples, and daily puzzles
 - `public/data/washington-dc/` — Washington network, examples, and daily puzzles
+- `public/data/berlin/` — Berlin network, examples, and September daily puzzles
 - `config/cities/` — city coverage, timing assumptions, output paths, and attribution
 - `scripts/build_city.py` — city-neutral build entry point
 - `scripts/build_data.py` — shared normalization, routing, timing, and puzzle generation
@@ -102,7 +124,7 @@ No city uses live service status, disruptions, closures, fares, accessibility, c
 - `scripts/verify_timing_model.py` — timing and puzzle verification
 - `scripts/download_tfl_data.py` — reproducible TfL snapshot downloader
 
-Raw source snapshots (`gouv_paris_gtfs-export/`, `gouv_london_tfl-export/`, and `gouv_chicago_gtfs-export/`) and generated all-pairs routing caches are intentionally ignored.
+Raw source snapshots (`gouv_paris_gtfs-export/`, `gouv_london_tfl-export/`, `gouv_chicago_gtfs-export/`, `gouv_washington_dc_gtfs-export/`, and `gouv_berlin_vbb_gtfs-export/`) and generated all-pairs routing caches are intentionally ignored.
 
 ## Build and verify
 
@@ -113,6 +135,7 @@ python scripts/build_city.py paris --mode release
 python scripts/build_city.py london --mode release
 python scripts/build_city.py chicago --mode release
 python scripts/build_city.py washington-dc --mode release
+python scripts/build_city.py berlin --mode release
 ```
 
 Useful incremental build modes include `network`, `all-pairs`, `example`, and `daily-range`.
@@ -122,13 +145,16 @@ python scripts/validate_city_schema.py paris
 python scripts/validate_city_schema.py london
 python scripts/validate_city_schema.py chicago
 python scripts/validate_city_schema.py washington-dc
+python scripts/validate_city_schema.py berlin
 python scripts/verify_timing_model.py paris
 python scripts/verify_timing_model.py london
 python scripts/verify_timing_model.py chicago
 python scripts/verify_timing_model.py washington-dc
+python scripts/verify_timing_model.py berlin
 python scripts/verify_london_network.py
 python scripts/verify_chicago_network.py
 python scripts/verify_washington_network.py
+python scripts/verify_berlin_network.py
 python scripts/check_auteuil_route.py
 ```
 
@@ -144,12 +170,14 @@ To refresh Chicago, download and extract CTA's current `google_transit.zip` into
 
 To refresh Washington, register for a WMATA developer key, download and extract the official `rail-gtfs-static.zip` into ignored `gouv_washington_dc_gtfs-export/`, and run the Washington release and verification commands.
 
+To refresh Berlin, download and extract VBB's official GTFS package into the ignored `gouv_berlin_vbb_gtfs-export/` directory, then run the Berlin release and verification commands. Review route labels, termini, station count, temporary services, and calendar validity before accepting a refreshed bundle.
+
 ## Timing limitations
 
-The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Branch-specific wait variation, route-pair-specific interchange times, and some service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. November and December puzzles continue to use the fixed representative snapshot even though its source calendar expires on 31 October 2026.
+The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Branch-specific wait variation, route-pair-specific interchange times, and some service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. November and December puzzles continue to use the fixed representative snapshot even though its source calendar expires on 31 October 2026. Berlin reflects scheduled September 2026 U-Bahn service, including the U6 closure north of Kurt-Schumacher-Platz, but excludes replacement buses and temporary U12 service.
 
 ## Attribution
 
-Paris data: Île-de-France Mobilités and ITO World. London data: Transport for London. Chicago: Data provided by Chicago Transit Authority, subject to CTA's Developer License Agreement and trademark guidelines. Washington: Schedule data provided by WMATA, subject to the [WMATA Transit Data Terms of Use](https://developer.wmata.com/license).
+Paris data: Île-de-France Mobilités and ITO World. London data: Transport for London. Chicago: Data provided by Chicago Transit Authority, subject to CTA's Developer License Agreement and trademark guidelines. Washington: Schedule data provided by WMATA, subject to the [WMATA Transit Data Terms of Use](https://developer.wmata.com/license). Berlin: Schedule data provided by Verkehrsverbund Berlin-Brandenburg (VBB) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
-Chronométro is independent and is not affiliated with or endorsed by RATP, Île-de-France Mobilités, Transport for London, the Chicago Transit Authority, WMATA, or the other operators and data providers represented in the game. It is neither made nor endorsed by the CTA or WMATA. No CTA or WMATA logos, branding, or official maps are used; official route names and colors identify service.
+Chronométro is independent and is not affiliated with or endorsed by RATP, Île-de-France Mobilités, Transport for London, the Chicago Transit Authority, WMATA, VBB, BVG, or the other operators and data providers represented in the game. It is neither made nor endorsed by the CTA, WMATA, VBB, or BVG. No operator logos, branding, or official maps are used; official route names and colors identify service.

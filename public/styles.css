@@ -468,6 +468,18 @@ h1 {
   border-color: #9eb9c8;
 }
 
+[data-city="berlin"] .orientation-map {
+  border-color: #9eb9c8;
+}
+
+[data-city="berlin"] .waterway {
+  stroke-width: 3;
+}
+
+.map-network-context--berlin {
+  opacity: .48;
+}
+
 [data-city="washington-dc"] .waterway {
   stroke-width: 3.25;
 }
@@ -525,7 +537,8 @@ h1 {
   box-shadow: none;
 }
 
-[data-city="washington-dc"] .station-lines .line-badge {
+[data-city="washington-dc"] .station-lines .line-badge,
+[data-city="berlin"] .station-lines .line-badge {
   flex-basis: auto;
   inline-size: auto;
   width: auto;
@@ -535,7 +548,8 @@ h1 {
   font-size: 9px;
 }
 
-[data-city="washington-dc"] .line-choice {
+[data-city="washington-dc"] .line-choice,
+[data-city="berlin"] .line-choice {
   grid-template-columns: 1fr;
   justify-items: center;
   justify-self: start;
@@ -547,14 +561,16 @@ h1 {
   box-shadow: none;
 }
 
-[data-city="washington-dc"] .line-choice-grid {
+[data-city="washington-dc"] .line-choice-grid,
+[data-city="berlin"] .line-choice-grid {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 3px 5px;
 }
 
-[data-city="washington-dc"] .line-choice .line-badge {
+[data-city="washington-dc"] .line-choice .line-badge,
+[data-city="berlin"] .line-choice .line-badge {
   min-width: 72px;
   height: 36px;
   padding-inline: 12px;

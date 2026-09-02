@@ -1,4 +1,4 @@
-const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc"]);
+const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc", "berlin"]);
 const requestedCityId = new URLSearchParams(window.location.search).get("city");
 const CITY_ID = SUPPORTED_CITY_IDS.has(requestedCityId) ? requestedCityId : "paris";
 const CITY_DATA_URL = `./data/${CITY_ID}`;
@@ -197,7 +197,7 @@ function routeDisplayName(r) {
 }
 
 function routeChoiceLabel(r) {
-  if (["london", "chicago", "washington-dc"].includes(CITY_ID)) return routeDisplayName(r);
+  if (["london", "chicago", "washington-dc", "berlin"].includes(CITY_ID)) return routeDisplayName(r);
   return `${modeName(r.mode)} ${r.label}`;
 }
 
@@ -2066,6 +2066,7 @@ function configureCityMap() {
   }
   const isChicago = CITY_ID === "chicago";
   const isWashington = CITY_ID === "washington-dc";
+  const isBerlin = CITY_ID === "berlin";
   CITY_MAP = {
     width: 320,
     height: 220,
@@ -2073,6 +2074,8 @@ function configureCityMap() {
       ? { minLat: 41.70, maxLat: 42.08, minLon: -87.91, maxLon: -87.54 }
       : isWashington
         ? { minLat: 38.76, maxLat: 39.13, minLon: -77.50, maxLon: -76.83 }
+        : isBerlin
+          ? { minLat: 52.39, maxLat: 52.68, minLon: 13.08, maxLon: 13.64 }
       : { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
     outline: [],
     parks: [],
@@ -2082,12 +2085,14 @@ function configureCityMap() {
       : [],
     waterway: isChicago ? [] : isWashington
       ? [[-77.12,39.02],[-77.10,38.99],[-77.08,38.96],[-77.06,38.93],[-77.05,38.90],[-77.04,38.88],[-77.02,38.86],[-77.00,38.84],[-77.00,38.80]]
+      : isBerlin
+        ? [[13.09,52.43],[13.16,52.44],[13.23,52.49],[13.31,52.52],[13.37,52.52],[13.43,52.51],[13.49,52.48],[13.57,52.45],[13.64,52.43]]
       : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
   };
 }
 
 function fitCityMapToPuzzle() {
-  if (CITY_ID === "paris" || CITY_ID === "chicago" || CITY_ID === "washington-dc") {
+  if (["paris", "chicago", "washington-dc", "berlin"].includes(CITY_ID)) {
     CITY_MAP.viewBounds = CITY_MAP.bounds;
     return;
   }
@@ -2487,7 +2492,7 @@ function renderLineStep(message = "") {
   state.stage = "line";
   const options = boardingOptions();
   const walks = walkOptions();
-  const compactRouteChoices = ["chicago", "washington-dc"].includes(CITY_ID);
+  const compactRouteChoices = ["chicago", "washington-dc", "berlin"].includes(CITY_ID);
   boardShell(`
     <div class="step-title">
       <h2>Choose your next move</h2>

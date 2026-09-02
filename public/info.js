@@ -1,4 +1,4 @@
-const supportedInfoCities = new Set(["paris", "london", "chicago", "washington-dc"]);
+const supportedInfoCities = new Set(["paris", "london", "chicago", "washington-dc", "berlin"]);
 const requestedInfoCity = new URLSearchParams(window.location.search).get("city");
 const infoCityId = supportedInfoCities.has(requestedInfoCity) ? requestedInfoCity : "paris";
 

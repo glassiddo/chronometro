@@ -2,6 +2,8 @@ gouv_paris_gtfs-export/
 gouv_london_tfl-export/
 gouv_chicago_gtfs-export/
 gouv_washington_dc_gtfs-export/
+gouv_berlin_vbb_gtfs-export/
+vbb-gtfs-*.zip
 scripts/__pycache__/
 *.pyc
 public/data/generated/
