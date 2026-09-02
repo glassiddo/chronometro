@@ -13,13 +13,16 @@
     "publisher": "Verkehrsverbund Berlin-Brandenburg static GTFS",
     "feedUrl": "https://unternehmen.vbb.de/gtfs",
     "downloadDate": "2026-09-02",
+    "normalNetworkArchiveDirectory": "gouv_berlin_vbb_gtfs-archive-2021",
+    "normalNetworkArchiveUrl": "https://unternehmen.vbb.de/fileadmin/user_upload/VBB/Dokumente/API-Datensaetze/gtfs-2021.zip",
+    "normalNetworkArchiveVersion": "VBB 2021",
     "fallbackVersion": "VBB-2026-09-02",
     "fallbackValidFrom": "2026-09-01",
     "fallbackValidTo": "2026-12-12"
   },
   "attribution": {
     "display": "Verkehrsverbund Berlin-Brandenburg (VBB)",
-    "disclaimer": "Schedule data provided by Verkehrsverbund Berlin-Brandenburg (VBB) under CC BY 4.0. Chronométro is independently made and is not affiliated with or endorsed by VBB or BVG. Static scheduled data only; no live arrivals or disruption data."
+    "disclaimer": "Schedule data provided by Verkehrsverbund Berlin-Brandenburg (VBB) under CC BY 4.0. Chronométro is independently made and is not affiliated with or endorsed by VBB or BVG. Representative full-network schedule; no live arrivals or disruption data."
   },
   "modes": {
     "ubahn": {"label": "U-Bahn", "defaultWaitSeconds": 150, "maximumWaitSeconds": 600}

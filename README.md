@@ -45,11 +45,11 @@ Complete scheduled `stop_times.txt` patterns preserve the terminal branches, sha
 ### Berlin
 
 - All nine regular U-Bahn lines: U1–U9
-- 170 playable VBB parent stations in the selected snapshot
+- 175 playable VBB parent stations in the representative full network
 - Excludes temporary U12 service, S-Bahn, trams, buses, ferries, regional rail, and long-distance rail
 - Daily puzzles from 5 through 30 September 2026
 
-Complete scheduled GTFS trip patterns supply the regular U1–U9 topology. The pinned September snapshot reflects the scheduled U6 closure north of Kurt-Schumacher-Platz; replacement buses are excluded.
+Complete scheduled GTFS trip patterns supply the regular U1–U9 topology. Because the current U6 is temporarily closed north of Kurt-Schumacher-Platz, its normal five-station extension to Alt-Tegel is restored from VBB's official 2021 GTFS archive. Replacement buses and temporary U12 service are excluded.
 
 ## Data sources
 
@@ -99,12 +99,12 @@ Station IDs are WMATA parent-station IDs, so child platforms, entrances, directi
 Berlin uses the official VBB static GTFS package:
 
 - feed: `https://unternehmen.vbb.de/gtfs`
-- snapshot downloaded 2 September 2026
+- primary snapshot downloaded 2 September 2026; the normally operating U6 north segment comes from VBB's official 2021 archive
 - calendar validity represented by the selected records: 1 September through 12 December 2026
 - weekday 07:00–10:00 departures supply expected waits
 - consecutive `stop_times.txt` values supply ride times; ordinary same-station changes use three minutes
 
-VBB publishes all Berlin and Brandenburg transport in one feed. The adapter requires BVG agency ID `796`, extended route type `400`, and one of the exact U1–U9 labels. Temporary U12 and every non-U-Bahn mode are excluded. Playable stations normalize through explicit GTFS `parent_station`; no geographic-proximity transfers are added.
+VBB publishes all Berlin and Brandenburg transport in one feed. The adapter requires BVG agency ID `796`, extended route type `400`, and one of the exact U1–U9 labels. Temporary U12 and every non-U-Bahn mode are excluded. Playable stations normalize through explicit GTFS `parent_station`; no geographic-proximity transfers are added. The resulting bundle models the normal full infrastructure rather than disruptions on one date.
 
 No city uses live service status, disruptions, closures, fares, accessibility, crowding, or real-time departure information.
 
@@ -170,11 +170,11 @@ To refresh Chicago, download and extract CTA's current `google_transit.zip` into
 
 To refresh Washington, register for a WMATA developer key, download and extract the official `rail-gtfs-static.zip` into ignored `gouv_washington_dc_gtfs-export/`, and run the Washington release and verification commands.
 
-To refresh Berlin, download and extract VBB's official GTFS package into the ignored `gouv_berlin_vbb_gtfs-export/` directory, then run the Berlin release and verification commands. Review route labels, termini, station count, temporary services, and calendar validity before accepting a refreshed bundle.
+To refresh Berlin, download and extract VBB's official GTFS package into the ignored `gouv_berlin_vbb_gtfs-export/` directory and VBB's 2021 archive into `gouv_berlin_vbb_gtfs-archive-2021/`, then run the Berlin release and verification commands. Review route labels, termini, station count, temporary services, archive compatibility, and calendar validity before accepting a refreshed bundle.
 
 ## Timing limitations
 
-The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Branch-specific wait variation, route-pair-specific interchange times, and some service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. November and December puzzles continue to use the fixed representative snapshot even though its source calendar expires on 31 October 2026. Berlin reflects scheduled September 2026 U-Bahn service, including the U6 closure north of Kurt-Schumacher-Platz, but excludes replacement buses and temporary U12 service.
+The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Branch-specific wait variation, route-pair-specific interchange times, and some service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. November and December puzzles continue to use the fixed representative snapshot even though its source calendar expires on 31 October 2026. Berlin models the normal full U-Bahn infrastructure: the closed U6 north segment uses archived scheduled runtimes, while current replacement buses and temporary U12 service are excluded.
 
 ## Attribution
 

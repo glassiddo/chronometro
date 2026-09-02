@@ -1498,6 +1498,10 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
     directions, used_stations, direction_pattern_keys = choose_patterns(
         routes, all_station_meta, segment_stats, pattern_counts, pattern_headsigns, pattern_peak_departures
     )
+    if hasattr(SOURCE_ADAPTER, "augment_scheduled_directions"):
+        SOURCE_ADAPTER.augment_scheduled_directions(
+            ROOT, CITY_CONFIG, routes, directions, used_stations, all_station_meta
+        )
 
     stations = {station_id: all_station_meta[station_id] for station_id in sorted(used_stations)}
     build_station_services(stations, routes, directions)

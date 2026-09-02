@@ -28,11 +28,13 @@ def main() -> None:
     require(labels == expected_labels, "network must contain exactly U1 through U9")
     require(all(route["routeType"] == "400" for route in network["routes"].values()), "non-U-Bahn route included")
 
-    raw_stops = {
-        row["stop_id"]: row
-        for row in csv.DictReader((ROOT / "gouv_berlin_vbb_gtfs-export/stops.txt").open(encoding="utf-8-sig"))
-    }
-    require(len(network["stations"]) == 170, "unexpected playable parent-station count")
+    raw_stops = {}
+    for directory in ("gouv_berlin_vbb_gtfs-export", "gouv_berlin_vbb_gtfs-archive-2021"):
+        raw_stops.update({
+            row["stop_id"]: row
+            for row in csv.DictReader((ROOT / directory / "stops.txt").open(encoding="utf-8-sig"))
+        })
+    require(len(network["stations"]) == 175, "unexpected playable parent-station count")
     require(all(raw_stops[sid].get("location_type") == "1" for sid in network["stations"]), "platform leaked into playable stations")
     require(all("(Berlin)" not in station["name"] for station in network["stations"].values()), "raw city suffix leaked into station name")
 
@@ -61,7 +63,7 @@ def main() -> None:
         "U3": {"Krumme Lanke", "Warschauer Str."},
         "U4": {"Nollendorfplatz", "Innsbrucker Platz"},
         "U5": {"Hönow", "Berlin Hauptbahnhof"},
-        "U6": {"Alt-Mariendorf", "Kurt-Schumacher-Platz"},
+        "U6": {"Alt-Mariendorf", "Alt-Tegel"},
         "U7": {"Rathaus Spandau", "Rudow"},
         "U8": {"Wittenau", "Hermannstr."},
         "U9": {"Osloer Str.", "Rathaus Steglitz"},
@@ -69,6 +71,9 @@ def main() -> None:
     for label, termini in expected_termini.items():
         actual = {network["stations"][direction["stations"][-1]]["name"] for direction in by_label[label]}
         require(actual == termini, f"unexpected {label} termini: {actual}")
+    u6_patterns = by_label["U6"]
+    require(all(len(direction["stations"]) == 29 for direction in u6_patterns), "full 29-station U6 was not restored")
+    require(all(direction["stopPattern"].get("source") == "VBB 2021" for direction in u6_patterns), "U6 archive provenance missing")
 
     station_by_name = {station["name"]: sid for sid, station in network["stations"].items()}
     expected_interchanges = {
