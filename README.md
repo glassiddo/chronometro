@@ -16,6 +16,8 @@ The browser loads a normalized city network and five puzzles for the selected da
 - Daily puzzles from 28 July through 31 December 2026
 - Excludes buses, ORLYVAL, CDG VAL, and non-RER rail
 
+The normal 37-stop T1 is restored from RATP's official full-line plan and an archived IDFM timetable because the 2026 snapshot reflects temporary closures on both sides of the retained central section. Normal RER A service at Nation is likewise restored from the pre-closure records within the snapshot. Replacement buses are excluded.
+
 ### London
 
 - All 11 Underground lines and the Elizabeth line
@@ -27,11 +29,11 @@ London branch paths are modeled separately. Circle and H&C frequencies are combi
 ### Chicago
 
 - All eight CTA ‘L’ routes: Red, Blue, Brown, Green, Orange, Pink, Purple, and Yellow
-- 143 playable CTA parent stations; platform/direction stops are retained while parsing schedules and normalized through GTFS `parent_station`
+- 144 playable CTA parent stations, including temporarily closed State/Lake; platform/direction stops are retained while parsing schedules and normalized through GTFS `parent_station`
 - Excludes CTA buses and Metra
 - Daily puzzles from 26 August through 31 December 2026
 
-The Loop and Green branches come from complete scheduled GTFS trip patterns. Purple local and weekday Loop Express patterns remain distinct.
+The Loop and Green branches come from complete scheduled GTFS trip patterns. State/Lake and its adjacent runtimes are restored from CTA's official 28 October 2025 GTFS archive; temporary construction reroutes remain excluded. Purple local and weekday Loop Express patterns remain distinct.
 
 ### Washington, DC
 
@@ -40,7 +42,7 @@ The Loop and Green branches come from complete scheduled GTFS trip patterns. Pur
 - Excludes Metrobus, DC Circulator, MARC, VRE, Amtrak, commuter buses, and other non-Metrorail service
 - Daily puzzles from 29 August through 31 December 2026
 
-Complete scheduled `stop_times.txt` patterns preserve the terminal branches, shared Blue/Orange/Silver, Blue/Yellow, and Green/Yellow infrastructure, and Silver Line Phase 2 through Dulles Airport to Ashburn. A temporary Silver-to-New-Carrollton pattern in this snapshot is excluded from playable topology.
+Complete scheduled `stop_times.txt` patterns preserve the terminal branches, shared Blue/Orange/Silver, Blue/Yellow, and Green/Yellow infrastructure, and Silver Line Phase 2 through Dulles Airport to Ashburn. The normal FY2026 split service is retained: Silver serves both Downtown Largo and New Carrollton, while Yellow serves both Greenbelt and Mount Vernon Square. Construction-only Red Line split patterns are excluded.
 
 ### Berlin
 
@@ -60,6 +62,8 @@ Paris uses an ITO World modified GTFS export derived from Île-de-France Mobilit
 - snapshot version `20260630_200738`
 - source validity: 27 June through 29 July 2026
 - weekday 07:00–10:00 departures supply expected waits where available
+- RATP's December 2023 full-line plan supplies the normal T1 station order; archived IDFM snapshot `mdb-1026-202512090057` supplies the eastern extension timings
+- the eleven western T1 segments missing from available post-bridge feeds use an explicit two-minute representative runtime pending a recoverable pre-May-2025 official timetable
 
 ### London
 
@@ -79,6 +83,7 @@ Chicago uses the official CTA static GTFS package:
 - calendar validity represented by the package: 5 August through 31 October 2026
 - weekday 07:00–10:00 departures supply expected waits
 - scheduled `stop_times.txt` patterns and runtimes supply topology and ride times; no live Train Tracker data is used
+- State/Lake station metadata and adjacent Loop runtimes come from official archived CTA snapshot `mdb-389-202510280038`
 
 CTA publishes buses and the ‘L’ in one feed. The adapter requires GTFS rail type `1` and one of the eight known ‘L’ route IDs. Playable stations use explicit CTA parent stations and normal same-station changes use a three-minute model; no geographic-proximity transfers are added.
 

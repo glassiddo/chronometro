@@ -39,7 +39,13 @@
     "shortTurnModes": ["metrorail"],
     "sharedServiceGroups": [],
     "routeContinuations": [],
-    "excludedPatternTerminiByRoute": {"SILVER": ["STN_D13"]},
+    "preservedPatternEndpointPairsByRoute": {
+      "YELLOW": [["STN_C15", "STN_E01"], ["STN_E01", "STN_C15"]],
+      "SILVER": [
+        ["STN_N12", "STN_G05"], ["STN_G05", "STN_N12"],
+        ["STN_N12", "STN_D13"], ["STN_D13", "STN_N12"]
+      ]
+    },
     "walkingTransfers": {"allowAll": true}
   },
   "puzzles": {

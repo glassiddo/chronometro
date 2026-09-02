@@ -31,8 +31,11 @@ def main() -> None:
         row["stop_id"]: row
         for row in csv.DictReader((ROOT / "gouv_chicago_gtfs-export/stops.txt").open(encoding="utf-8-sig"))
     }
-    require(len(network["stations"]) == 143, "unexpected playable parent-station count")
-    require(all(raw_stops[sid].get("location_type") == "1" for sid in network["stations"]), "platform leaked into playable stations")
+    require(len(network["stations"]) == 144, "unexpected playable parent-station count")
+    require(
+        all(sid == "40260" or raw_stops[sid].get("location_type") == "1" for sid in network["stations"]),
+        "platform leaked into playable stations",
+    )
 
     adjacency: dict[str, set[str]] = defaultdict(set)
     for direction in network["directions"].values():
@@ -55,7 +58,7 @@ def main() -> None:
     require(len(by_route["G"]) == 4, "Green branches/directions were not preserved")
     require(len(by_route["P"]) == 3, "Purple local and Loop Express patterns were not preserved")
     purple_lengths = sorted(len(item["stations"]) for item in by_route["P"])
-    require(purple_lengths == [9, 9, 43], "unexpected Purple local/express topology")
+    require(purple_lengths == [9, 9, 44], "unexpected Purple local/express topology")
     require(all(len(item["stations"]) >= 3 for items in by_route.values() for item in items), "exceptional one-stop branch survived")
 
     station_by_name = {item["name"]: sid for sid, item in network["stations"].items()}
@@ -65,6 +68,17 @@ def main() -> None:
         require({"G", "Pink"} <= set(services), f"Green/Pink shared station missing both services: {sid}")
     loop_routes = {rid for rid in ("Brn", "Org", "Pink", "P") if any(d["stations"][0] == d["stations"][-1] for d in by_route[rid])}
     require(loop_routes == {"Brn", "Org", "Pink", "P"}, "Loop patterns are incomplete")
+    state_lake = "40260"
+    require(network["stations"][state_lake]["name"] == "State/Lake", "historical State/Lake restoration missing")
+    require(
+        all(
+            state_lake in item["stations"]
+            for route_id in ("Brn", "G", "Org", "Pink", "P")
+            for item in by_route[route_id]
+            if "40380" in item["stations"] and "41700" in item["stations"]
+        ),
+        "a normal Loop pattern still bypasses State/Lake",
+    )
 
     router = build_data.Router(
         network["stations"], network["routes"], network["directions"], network["transfers"],

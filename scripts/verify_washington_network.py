@@ -53,10 +53,24 @@ def main() -> None:
     by_route = defaultdict(list)
     for direction in network["directions"].values():
         by_route[direction["routeId"]].append(direction)
-    require(len(by_route["SILVER"]) == 2, "temporary/exceptional Silver pattern survived")
-    require(all(item["stations"][-1] != "STN_D13" for item in by_route["SILVER"]), "Silver incorrectly terminates at New Carrollton")
+    require(len(by_route["SILVER"]) == 4, "normal split Silver service is incomplete")
+    require(
+        {(item["stations"][0], item["stations"][-1]) for item in by_route["SILVER"]}
+        == {
+            ("STN_N12", "STN_G05"), ("STN_G05", "STN_N12"),
+            ("STN_N12", "STN_D13"), ("STN_D13", "STN_N12"),
+        },
+        "Silver must serve both Downtown Largo and New Carrollton from Ashburn",
+    )
     require(any("STN_N10" in item["stations"] and "STN_N12" in item["stations"] for item in by_route["SILVER"]), "Silver Phase 2/Dulles/Ashburn missing")
-    require({item["stations"][-1] for item in by_route["YELLOW"]} == {"STN_E10", "STN_C15"}, "Yellow scheduled Greenbelt/Huntington pattern missing")
+    require(
+        {(item["stations"][0], item["stations"][-1]) for item in by_route["YELLOW"]}
+        == {
+            ("STN_C15", "STN_E10"), ("STN_E10", "STN_C15"),
+            ("STN_C15", "STN_E01"), ("STN_E01", "STN_C15"),
+        },
+        "normal Yellow Greenbelt/Mt Vernon Sq split service is incomplete",
+    )
 
     def edges(route_id: str) -> set[frozenset[str]]:
         return {frozenset((a, b)) for item in by_route[route_id] for a, b in zip(item["stations"], item["stations"][1:])}
