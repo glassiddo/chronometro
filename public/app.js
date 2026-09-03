@@ -1,17 +1,27 @@
 const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc", "boston"]);
 const requestedCityId = new URLSearchParams(window.location.search).get("city");
 const CITY_ID = SUPPORTED_CITY_IDS.has(requestedCityId) ? requestedCityId : "paris";
+const CITY_TIMEZONES = {
+  paris: "Europe/Paris",
+  london: "Europe/London",
+  chicago: "America/Chicago",
+  "washington-dc": "America/New_York",
+  boston: "America/New_York",
+};
 const CITY_DATA_URL = `./data/${CITY_ID}`;
 const NETWORK_URL = `${CITY_DATA_URL}/network.json`;
+const RIVERS_URL = `${CITY_DATA_URL}/rivers.json?map=20260903-linked`;
 const DAILY_INDEX_URL = `${CITY_DATA_URL}/daily/index.json`;
 const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
 const DATA_REVISION = "20260831-london-dlr-preview-rer-b-fixes";
+const BOSTON_BASEMAP_URL = "./data/boston/coastline.svg?v=20260903";
 
 const state = {
   data: null,
+  rivers: [],
   daily: [],
   dailyDate: "",
   dailyKind: "",
@@ -146,7 +156,7 @@ function stepType(step) {
 
 function cityDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: state.data?.metadata?.city?.timezone || "UTC",
+    timeZone: state.data?.metadata?.city?.timezone || CITY_TIMEZONES[CITY_ID],
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -1990,72 +2000,6 @@ const PARIS_MAP = {
       ]
     ]
   ],
-  "waterway": [
-    [
-      2.224,
-      48.842
-    ],
-    [
-      2.238,
-      48.842
-    ],
-    [
-      2.252,
-      48.845
-    ],
-    [
-      2.266,
-      48.849
-    ],
-    [
-      2.281,
-      48.852
-    ],
-    [
-      2.296,
-      48.857
-    ],
-    [
-      2.31,
-      48.861
-    ],
-    [
-      2.323,
-      48.862
-    ],
-    [
-      2.337,
-      48.858
-    ],
-    [
-      2.35,
-      48.853
-    ],
-    [
-      2.363,
-      48.848
-    ],
-    [
-      2.377,
-      48.842
-    ],
-    [
-      2.391,
-      48.836
-    ],
-    [
-      2.405,
-      48.829
-    ],
-    [
-      2.42,
-      48.823
-    ],
-    [
-      2.438,
-      48.817
-    ]
-  ]
 };
 
 let CITY_MAP = PARIS_MAP;
@@ -2072,7 +2016,7 @@ function configureCityMap() {
     width: 320,
     height: 220,
     bounds: isBoston
-      ? { minLat: 42.20, maxLat: 42.51, minLon: -71.30, maxLon: -70.98 }
+      ? { minLat: 42.19, maxLat: 42.46, minLon: -71.33, maxLon: -70.78 }
       : isChicago
       ? { minLat: 41.70, maxLat: 42.08, minLon: -87.91, maxLon: -87.54 }
       : isWashington
@@ -2081,31 +2025,36 @@ function configureCityMap() {
     outline: [],
     parks: [],
     airport: null,
-    waterbodies: isBoston ? [
-      // Inner Boston Harbor, between downtown and East Boston.
-      [[-71.060,42.374],[-71.047,42.378],[-71.030,42.372],[-71.025,42.360],[-71.039,42.350],[-71.054,42.351],[-71.061,42.360]],
-      // Chelsea Creek and the lower Mystic, kept north of East Boston.
-      [[-71.087,42.397],[-71.065,42.402],[-71.040,42.397],[-71.025,42.386],[-71.038,42.379],[-71.061,42.386],[-71.080,42.385]],
-      // Dorchester Bay, east of the Red Line's south-shore corridor.
-      [[-71.044,42.337],[-71.020,42.343],[-70.995,42.331],[-70.985,42.300],[-71.004,42.280],[-71.025,42.292],[-71.035,42.316]],
-      // Two restrained harbor-island cues.
-      [[-71.025,42.352],[-71.019,42.355],[-71.014,42.351],[-71.019,42.347]],
-      [[-71.012,42.337],[-71.006,42.340],[-71.001,42.336],[-71.006,42.332]]
-    ] : [],
+    basemap: isBoston ? BOSTON_BASEMAP_URL : null,
     waterbody: isBoston
       ? []
       : isChicago
       ? [[-87.595,41.70],[-87.600,41.76],[-87.612,41.82],[-87.625,41.88],[-87.613,41.94],[-87.600,42.01],[-87.592,42.08],[-87.51,42.08],[-87.51,41.70]]
       : [],
-    waterway: isBoston
-      ? [[-71.22,42.37],[-71.16,42.37],[-71.12,42.365],[-71.09,42.367],[-71.06,42.37],[-71.04,42.375]]
-      : isChicago ? [] : isWashington
-      ? [[-77.12,39.02],[-77.10,38.99],[-77.08,38.96],[-77.06,38.93],[-77.05,38.90],[-77.04,38.88],[-77.02,38.86],[-77.00,38.84],[-77.00,38.80]]
-      : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
   };
 }
 
 function fitCityMapToPuzzle() {
+  if (CITY_ID === "boston") {
+    const puzzle = currentPuzzle();
+    const points = [station(puzzle.start), station(puzzle.end), station(state.currentStation)]
+      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
+    const lats = points.map((point) => point.lat);
+    const lons = points.map((point) => point.lon);
+    const bounds = CITY_MAP.bounds;
+    const aspect = (bounds.maxLon - bounds.minLon) / (bounds.maxLat - bounds.minLat);
+    const latSpan = Math.min(bounds.maxLat - bounds.minLat, Math.max(
+      .16, (Math.max(...lats) - Math.min(...lats)) * 1.5,
+      (Math.max(...lons) - Math.min(...lons)) * 1.5 / aspect,
+    ));
+    const lonSpan = latSpan * aspect;
+    const minLat = Math.max(bounds.minLat, Math.min(bounds.maxLat - latSpan,
+      (Math.min(...lats) + Math.max(...lats) - latSpan) / 2));
+    const minLon = Math.max(bounds.minLon, Math.min(bounds.maxLon - lonSpan,
+      (Math.min(...lons) + Math.max(...lons) - lonSpan) / 2));
+    CITY_MAP.viewBounds = { minLat, maxLat: minLat + latSpan, minLon, maxLon: minLon + lonSpan };
+    return;
+  }
   if (["paris", "chicago", "washington-dc", "boston"].includes(CITY_ID)) {
     CITY_MAP.viewBounds = CITY_MAP.bounds;
     return;
@@ -2222,6 +2171,24 @@ function networkContextMapMarkup() {
   return `<path class="map-network-context map-network-context--${CITY_ID}" d="${segments.join(" ")}"></path>`;
 }
 
+function basemapMarkup() {
+  if (!CITY_MAP.basemap) return "";
+  const bounds = CITY_MAP.bounds;
+  const view = CITY_MAP.viewBounds || bounds;
+  const scale = (bounds.maxLon - bounds.minLon) / (view.maxLon - view.minLon);
+  const origin = mapPoint({ lon: bounds.minLon, lat: bounds.maxLat }, false);
+  return `<image href="${CITY_MAP.basemap}" x="${origin.x - 12 * scale}" y="${origin.y - 12 * scale}" width="${320 * scale}" height="${220 * scale}"></image>`;
+}
+
+function riverMapMarkup() {
+  return state.rivers.map((river) => {
+    const points = river.points.map(([lon, lat]) => mapPoint({ lat, lon }, false));
+    const path = points.map((point, index) =>
+      `${index ? "L" : "M"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
+    return `<path class="waterway" d="${path}"></path>`;
+  }).join("");
+}
+
 function orientationMapMarkup() {
   const puzzle = currentPuzzle();
   fitCityMapToPuzzle();
@@ -2235,17 +2202,19 @@ function orientationMapMarkup() {
         <title id="orientationMapTitle">${escapeHtml(state.data.metadata.city.name)} orientation map</title>
         <desc id="orientationMapDesc">A simplified city map with the start station and destination station.</desc>
         <rect class="map-bg" width="${CITY_MAP.width}" height="${CITY_MAP.height}" rx="6"></rect>
+        ${basemapMarkup()}
         ${CITY_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
         ${CITY_MAP.airport ? `<path class="map-airport" d="${mapCurvePath(CITY_MAP.airport, true)}"></path>` : ""}
         ${CITY_MAP.outline.length ? `<path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>` : ""}
         ${(CITY_MAP.waterbodies || []).map((body) => `<path class="waterbody" d="${mapCurvePath(body, true)}"></path>`).join("")}
         ${CITY_MAP.waterbody?.length ? `<path class="waterbody" d="${mapCurvePath(CITY_MAP.waterbody, true)}"></path>` : ""}
-        ${CITY_MAP.waterway.length ? `<path class="waterway" d="${mapCurvePath(CITY_MAP.waterway)}"></path>` : ""}
+        ${riverMapMarkup()}
         ${networkContextMapMarkup()}
         ${mapMarker(puzzle.start, "Start", "start-marker")}
         ${mapMarker(puzzle.end, "End", "end-marker")}
         ${current}
       </svg>
+      <figcaption class="map-attribution">Rivers © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></figcaption>
     </figure>
   `;
 }
@@ -3258,17 +3227,22 @@ function bindCitySelector() {
 }
 
 async function init() {
+  if (CITY_ID === "boston") new Image().src = BOSTON_BASEMAP_URL;
   showLoadingState();
   bindCitySelector();
   $("#homeButton").addEventListener("click", () => {
     if (state.data) restartDay();
   });
-  state.data = await fetchJson(NETWORK_URL);
+  const [network, puzzleSet, riverData] = await Promise.all([
+    fetchJson(NETWORK_URL),
+    loadPuzzleSet(cityDateString()),
+    fetchJson(RIVERS_URL),
+  ]);
+  state.data = network;
+  state.rivers = riverData?.rivers || [];
   if (!state.data) throw new Error("Network load failed");
   configureCityMap();
   updateCityChrome();
-  const today = cityDateString();
-  const puzzleSet = await loadPuzzleSet(today);
   state.daily = puzzleSet.puzzles;
   state.dailyDate = puzzleSet.date;
   state.dailyKind = puzzleSet.kind;
