@@ -110,7 +110,7 @@ def optimal_route_edge_count(data: dict, optimal_route: dict) -> int:
         for segment in leg.get("segments") or [leg]:
             stations = data["directions"][segment["directionId"]]["stations"]
             from_index = stations.index(segment["from"])
-            to_index = stations.index(segment["to"])
+            to_index = stations.index(segment["to"], from_index + 1)
             edge_count += to_index - from_index
     return edge_count
 
@@ -121,7 +121,7 @@ def optimal_route_distance_m(data: dict, optimal_route: dict) -> float:
         for segment in leg.get("segments") or [leg]:
             direction_stations = data["directions"][segment["directionId"]]["stations"]
             from_index = direction_stations.index(segment["from"])
-            to_index = direction_stations.index(segment["to"])
+            to_index = direction_stations.index(segment["to"], from_index + 1)
             for left_id, right_id in zip(
                 direction_stations[from_index:to_index],
                 direction_stations[from_index + 1 : to_index + 1],

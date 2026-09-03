@@ -17,6 +17,8 @@ import math
 import random
 import re
 import sys
+import tempfile
+import time
 import unicodedata
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
@@ -89,10 +91,23 @@ def read_csv(name: str):
 
 def write_json(path: Path, data: dict | list) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
-        encoding="utf-8",
-    )
+    # Publish complete files atomically. Synced Windows folders can briefly
+    # lock destinations; a failed write must not leave a truncated puzzle.
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+        prefix=f".{path.name}.", suffix=".tmp", delete=False) as handle:
+        temporary = Path(handle.name)
+        json.dump(data, handle, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    try:
+        for attempt in range(5):
+            try:
+                temporary.replace(path)
+                break
+            except OSError as error:
+                if attempt == 4 or not (error.errno == 22 or getattr(error, "winerror", None) in {32, 33}):
+                    raise
+                time.sleep(0.2 * (attempt + 1))
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def file_size_mb(path: Path) -> float:
@@ -362,6 +377,10 @@ def read_stop_times(
             for left, right in zip(collapsed, collapsed[1:]):
                 from_station, _from_arrival, from_departure = left
                 to_station, to_arrival, _to_departure = right
+                if hasattr(SOURCE_ADAPTER, "segment_arrival"):
+                    to_arrival = SOURCE_ADAPTER.segment_arrival(route_id, to_arrival, _to_departure)
+                if hasattr(SOURCE_ADAPTER, "include_segment_timing") and not SOURCE_ADAPTER.include_segment_timing(route_id, from_departure):
+                    continue
                 if from_station == to_station or from_departure is None or to_arrival is None:
                     continue
                 runtime = to_arrival - from_departure
@@ -886,7 +905,7 @@ class Router:
         except ValueError:
             return int(wait)
         ride_stations = direction["stations"][start_index : end_index + 1]
-        waits_by_service = {f"{route_id}:{direction_id}": int(wait)}
+        waits_by_service = {direction.get("frequencyGroup", f"{route_id}:{direction_id}"): int(wait)}
         for candidate in self.directions.values():
             candidate_route_id = candidate["routeId"]
             same_route_pattern = (
@@ -908,7 +927,7 @@ class Router:
                     candidate_route_id,
                     self.routes[candidate_route_id]["mode"],
                 )
-                service_key = (
+                service_key = candidate.get("frequencyGroup") or (
                     f"{candidate_route_id}:{candidate['id']}"
                     if same_route_pattern
                     else candidate_route_id
@@ -919,7 +938,9 @@ class Router:
                 )
         if len(waits_by_service) == 1:
             return int(wait)
-        return round(1 / sum(1 / candidate_wait for candidate_wait in waits_by_service.values()))
+        combined = 1 / sum(1 / candidate_wait for candidate_wait in waits_by_service.values())
+        # JavaScript Math.round rounds positive ties upward, unlike Python.
+        return math.floor(combined + 0.5) if CITY_CONFIG["network"].get("exactRideRouting") else round(combined)
 
     def transfer_walk(
         self,
@@ -1042,7 +1063,90 @@ class Router:
                     heapq.heappush(queue, (new_cost, next_node))
         return None
 
+    def fastest_complete_ride_path(self, start_station: str, end_station: str) -> tuple[int, list[str]] | None:
+        """Search with whole-ride frequency costs, rather than discounting after search.
+
+        A state is an alighting station and the last direction boarded. Every
+        outgoing edge is one complete ride, including its applicable shared
+        wait and interchange. Cache one origin's shortest-path tree for the
+        all-pairs build; never retain all origin trees in memory.
+        """
+        if not hasattr(self, "_complete_rides"):
+            self._complete_rides = defaultdict(list)
+            for direction in self.directions.values():
+                ids = direction["stations"]
+                limit = direction.get("ringStationCount", len(ids) - 1)
+                for i in range(limit):
+                    ride_sec = 0
+                    stop = min(len(ids), i + direction.get("ringStationCount", len(ids)))
+                    for j in range(i + 1, stop):
+                        ride_sec += direction["runtimes"][j - 1]
+                        wait = self.combined_wait_seconds(direction["id"], direction["routeId"], ids[i], ids[j])
+                        self._complete_rides[ids[i]].append((ids[j], direction["id"], i, j, ride_sec + wait))
+            self._ride_neighbors = {}
+
+        def neighbors(state):
+            if state in self._ride_neighbors:
+                return self._ride_neighbors[state]
+            station_id, previous_dir = state
+            previous_route = self.directions[previous_dir]["routeId"] if previous_dir else None
+            boarding = {station_id: 0}
+            boarding.update(self.transfers.get(station_id, {}))
+            result = []
+            for board_station, initial_walk in boarding.items():
+                for destination, did, i, j, ride_cost in self._complete_rides[board_station]:
+                    if previous_dir == did:
+                        continue  # staying aboard was already offered as a complete ride
+                    rid = self.directions[did]["routeId"]
+                    transfer = initial_walk if not previous_dir else self.transfer_walk(
+                        station_id, board_station, previous_route, rid,
+                        self.routes[previous_route]["mode"], self.routes[rid]["mode"])
+                    if transfer is None:
+                        continue
+                    result.append(((destination, did), transfer + ride_cost, (did, i, j)))
+            self._ride_neighbors[state] = result
+            return result
+
+        if getattr(self, "_complete_origin", None) != start_station:
+            source = (start_station, "")
+            best, previous, endings = {source: 0}, {}, {}
+            queue = [(0, source)]
+            while queue:
+                cost, state = heapq.heappop(queue)
+                if cost != best[state]:
+                    continue
+                endings.setdefault(state[0], state)
+                for target, weight, ride in neighbors(state):
+                    new_cost = cost + weight
+                    if new_cost < best.get(target, sys.maxsize):
+                        best[target] = new_cost
+                        previous[target] = (state, ride)
+                        heapq.heappush(queue, (new_cost, target))
+            self._complete_origin = start_station
+            self._complete_tree = best, previous, endings
+        best, previous, endings = self._complete_tree
+        arrivals = [(best[endings[end_station]], endings[end_station])] if end_station in endings else []
+        # The UI also permits finishing by walking across an explicit station
+        # interchange, without boarding another train or paying another wait.
+        for sid, destinations in self.transfers.items():
+            if end_station in destinations and sid in endings:
+                arrivals.append((best[endings[sid]] + destinations[end_station], endings[sid]))
+        if not arrivals:
+            return None
+        final_cost, end = min(arrivals)
+        rides, state = [], end
+        while state in previous:
+            state, ride = previous[state]
+            rides.append(ride)
+        path = ["__start__"]
+        for did, i, j in reversed(rides):
+            path.extend(f"{did}|{index}" for index in range(i, j + 1))
+        path.append("__end__")
+        return final_cost, path
+
     def fastest_path(self, start_station: str, end_station: str) -> tuple[int, list[str]] | None:
+        if CITY_CONFIG["network"].get("exactRideRouting"):
+            return self.fastest_complete_ride_path(start_station, end_station)
         source = "__start__"
         target = "__end__"
         extra_edges: dict[str, list[tuple[str, int]]] = defaultdict(list)
@@ -1089,7 +1193,7 @@ class Router:
         direction = self.directions[direction_id]
         try:
             from_index = direction["stations"].index(from_station)
-            to_index = direction["stations"].index(to_station)
+            to_index = direction["stations"].index(to_station, from_index + 1)
         except ValueError:
             return None
         if to_index <= from_index:
@@ -1336,6 +1440,15 @@ class Router:
                 pending_transfer -= transfer
 
         flush_ride()
+        if CITY_CONFIG["network"].get("exactRideRouting") and end_station is not None:
+            alight_station = self.nodes[route_nodes[-1]]["stationId"]
+            if alight_station != end_station:
+                walk = self.transfers.get(alight_station, {}).get(end_station)
+                if walk is None:
+                    raise ValueError("Complete-ride path does not reach its destination")
+                steps.append({"type": "walk", "from": alight_station, "to": end_station,
+                    "rideSec": 0, "waitSec": 0, "transferSec": walk, "elapsedSec": walk})
+                totals["transferSec"] += walk
         if pending_wait or pending_transfer:
             # A route may end after a transfer edge into the destination station.
             # Keep the graph cost visible without inventing a zero-length ride.
@@ -1356,7 +1469,7 @@ class Router:
             return None
 
         total_from_steps = sum(step["elapsedSec"] for step in steps)
-        if total_from_steps != int(cost) and steps:
+        if total_from_steps != int(cost) and steps and not CITY_CONFIG["network"].get("exactRideRouting"):
             delta = int(cost) - total_from_steps
             steps[-1]["transferSec"] += delta
             steps[-1]["elapsedSec"] += delta
@@ -1436,6 +1549,8 @@ def build_route_continuations(directions: dict[str, dict]) -> list[dict]:
 
 
 def is_within_puzzle_bounds(station: dict) -> bool:
+    if hasattr(SOURCE_ADAPTER, "is_within_puzzle_boundary"):
+        return SOURCE_ADAPTER.is_within_puzzle_boundary(station)
     lat = station.get("lat")
     lon = station.get("lon")
     bounds = CITY_CONFIG["puzzles"].get("bounds")
@@ -1473,7 +1588,7 @@ def optimal_route_edge_count(optimal_route: dict, directions: dict[str, dict]) -
         for segment in leg.get("segments") or [leg]:
             stations = directions[segment["directionId"]]["stations"]
             from_index = stations.index(segment["from"])
-            to_index = stations.index(segment["to"])
+            to_index = stations.index(segment["to"], from_index + 1)
             edge_count += to_index - from_index
     return edge_count
 
@@ -1484,7 +1599,7 @@ def optimal_route_distance_m(optimal_route: dict, directions: dict[str, dict], s
         for segment in leg.get("segments") or [leg]:
             direction_stations = directions[segment["directionId"]]["stations"]
             from_index = direction_stations.index(segment["from"])
-            to_index = direction_stations.index(segment["to"])
+            to_index = direction_stations.index(segment["to"], from_index + 1)
             for left_id, right_id in zip(
                 direction_stations[from_index:to_index],
                 direction_stations[from_index + 1 : to_index + 1],
@@ -1812,6 +1927,8 @@ def select_varied_playable(pairs: list[dict], count: int, seed: str) -> list[dic
     used_unordered: set[tuple[str, str]] = set()
 
     def take(require_unused_stations: bool) -> None:
+        if len(selected) >= count:
+            return
         for pair in playable:
             if pair in selected:
                 continue
@@ -1827,12 +1944,28 @@ def select_varied_playable(pairs: list[dict], count: int, seed: str) -> list[dic
                 return
 
     playable = shuffled
+    required_modes = CITY_CONFIG["puzzles"].get("dailyModeMix", [])
+    if required_modes and "-daily:" in seed:
+        def solution_mode(pair):
+            modes = {leg["mode"] for leg in pair["optimalRoute"]["legs"]}
+            return next(iter(modes)) if len(modes) == 1 else "mixed"
+        for mode in required_modes[:count]:
+            candidates = [pair for pair in playable if solution_mode(pair) == mode
+                and pair["start"] not in used_station_ids and pair["end"] not in used_station_ids]
+            if not candidates:
+                raise RuntimeError(f"No distinct-endpoint daily candidate for {mode}")
+            pair = candidates[0]
+            selected.append(pair)
+            used_station_ids.update([pair["start"], pair["end"]])
+            used_unordered.add(tuple(sorted([pair["start"], pair["end"]])))
     take(require_unused_stations=True)
     if len(selected) < count:
         take(require_unused_stations=False)
 
     if len(selected) < count:
         raise RuntimeError(f"only selected {len(selected)} playable pairs; need {count}")
+    if required_modes and "-daily:" in seed:
+        rng.shuffle(selected)
     return selected
 
 

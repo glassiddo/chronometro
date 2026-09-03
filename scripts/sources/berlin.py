@@ -1,23 +1,36 @@
-"""Berlin U-Bahn selection and display rules for the VBB static GTFS feed."""
+"""Berlin regular U/S-Bahn normalization, historical repairs, and geography."""
 
 from __future__ import annotations
 
 import csv
+import json
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
+from functools import lru_cache
 
 
 BVG_AGENCY_ID = "796"
 U_BAHN_LINES = {f"U{number}" for number in range(1, 10)}
+S_BAHN_LINES = {"S1", "S15", "S2", "S25", "S26", "S3", "S41", "S42", "S46", "S47", "S5", "S7", "S75", "S8", "S85", "S9"}
+
+
+def segment_arrival(route_id, arrival, departure):
+    # Departure-to-departure includes station dwell, material on a full ring.
+    # Preserve the existing U-Bahn timing convention.
+    return departure if route_id in S_BAHN_LINES and departure is not None else arrival
+
+
+def include_segment_timing(route_id, departure):
+    return route_id not in S_BAHN_LINES or departure is not None and 7 * 3600 <= departure < 10 * 3600
 
 
 def feed_metadata(root: Path, config: dict) -> dict[str, str]:
     source = config["source"]
     return {
-        "generatedFrom": f"{source['directory']} + {source['normalNetworkArchiveDirectory']} (U6 north)",
+        "generatedFrom": f"{source['directory']} + {source['normalNetworkArchiveDirectory']} (U6 north, Wollankstraße) + regular S-Bahn timetable",
         "publisher": source["publisher"],
-        "feedVersion": f"{source['fallbackVersion']} + {source['normalNetworkArchiveVersion']} U6 north",
+        "feedVersion": f"{source['fallbackVersion']} + {source['normalNetworkArchiveVersion']} normal-network repairs + S-Bahn regular service 2026",
         "feedValidFrom": source["fallbackValidFrom"],
         "feedValidTo": source["fallbackValidTo"],
     }
@@ -34,12 +47,14 @@ def canonical_mode(row: dict[str, str]) -> str | None:
     label = route_label(row)
     if row.get("agency_id") == BVG_AGENCY_ID and row.get("route_type") == "400" and label in U_BAHN_LINES:
         return "ubahn"
+    if row.get("agency_id") == "1" and row.get("route_type") == "109" and label in S_BAHN_LINES:
+        return "sbahn"
     return None
 
 
 def normalize_station_name(value: str) -> str:
     value = re.sub(r"\s*\(Berlin\)\s*$", "", value or "", flags=re.I)
-    value = re.sub(r"^(?:S\+U|U)\s+", "", value, flags=re.I)
+    value = re.sub(r"^(?:S\+U|U|S)\s+", "", value, flags=re.I)
     value = re.sub(r"\s+Bhf\.?$", "", value, flags=re.I)
     return re.sub(r"\s+", " ", value).strip()
 
@@ -175,7 +190,156 @@ def augment_scheduled_directions(
 def route_type_mapping_metadata() -> dict[str, str]:
     return {
         "400": "BVG U-Bahn; only stable U1 through U9 line labels included",
+        "109": "S-Bahn Berlin GmbH; regular S-Bahn lines only, including S15; discontinued S45 excluded",
         "700": "bus and replacement service; excluded",
         "900": "tram; excluded",
-        "other": "excluded (including S-Bahn, regional rail, ferry, and temporary U12 service)",
+        "other": "excluded (including regional rail, ferry, and temporary U12 service)",
     }
+
+
+@lru_cache(maxsize=1)
+def _state_polygons():
+    path = Path(__file__).resolve().parents[2] / "config/berlin-state-boundary.geojson"
+    features = json.loads(path.read_text(encoding="utf-8"))["features"]
+    return [polygon for feature in features for polygon in feature["geometry"]["coordinates"]]
+
+
+def is_within_puzzle_boundary(station: dict) -> bool:
+    """ALKIS state polygon, EPSG:4326, longitude first; preserve holes/islands."""
+    x, y = station.get("lon"), station.get("lat")
+    if not isinstance(x, (float, int)) or not isinstance(y, (float, int)):
+        return False
+
+    def inside(ring):
+        result = False
+        for (ax, ay), (bx, by) in zip(ring, ring[1:]):
+            if (ay > y) != (by > y) and x < (bx - ax) * (y - ay) / (by - ay) + ax:
+                result = not result
+        return result
+
+    return any(inside(polygon[0]) and not any(inside(hole) for hole in polygon[1:]) for polygon in _state_polygons())
+
+
+def build_normalized_source(root: Path, config: dict) -> dict:
+    """Regular service manifest, with current timings and explicit archive repairs.
+
+    VBB route IDs distinguish timetable variants, not public lines. Collapse
+    S-Bahn IDs before aggregation; never count those IDs as extra frequencies.
+    """
+    import build_data as b
+
+    raw_routes = b.read_routes()
+    stop_to_station, station_meta = b.read_stops()
+    services = b.read_weekday_services()
+    trips = b.read_trips(raw_routes, services)
+    routes = {}
+    route_map = {}
+    for raw_id, route in raw_routes.items():
+        route_id = route["label"] if route["mode"] == "sbahn" else raw_id
+        route_map[raw_id] = route_id
+        if route_id not in routes or route["color"] != "#777777":
+            routes[route_id] = {**route, "id": route_id}
+    for trip in trips.values():
+        trip["routeId"] = route_map[trip["routeId"]]
+    stats, counts, headsigns, departures, raw_stop_routes = b.read_stop_times(trips, stop_to_station, services)
+    u_routes = {rid: r for rid, r in routes.items() if r["mode"] == "ubahn"}
+    directions, used, keys = b.choose_patterns(u_routes, station_meta, stats, counts, headsigns, departures)
+    augment_scheduled_directions(root, config, routes, directions, used, station_meta)
+    waits, route_waits = b.build_waits(directions, u_routes, keys, departures)
+
+    # Scan historical S-Bahn edges only. Keep stable VBB parent IDs and use
+    # the current station metadata even where archived runtimes are required.
+    archive = root / config["source"]["normalNetworkArchiveDirectory"]
+    def read(name):
+        return csv.DictReader((archive / f"{name}.txt").open(encoding="utf-8-sig", newline=""))
+    old_routes = {r["route_id"]: route_label(r) for r in read("routes") if r["agency_id"] == "1" and r["route_type"] == "109"}
+    old_trips = {t["trip_id"] for t in read("trips") if t["route_id"] in old_routes}
+    old_stops = {s["stop_id"]: s for s in read("stops")}
+    old_rows = defaultdict(list)
+    with (archive / "stop_times.txt").open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle)
+        ix = {name: i for i, name in enumerate(next(reader))}
+        for row in reader:
+            if row[ix["trip_id"]] in old_trips:
+                sid = row[ix["stop_id"]]
+                old_rows[row[ix["trip_id"]]].append((int(row[ix["stop_sequence"]]), old_stops[sid].get("parent_station") or sid,
+                    _parse_time(row[ix["arrival_time"]]), _parse_time(row[ix["departure_time"]])))
+    historic_edges = defaultdict(list)
+    for rows in old_rows.values():
+        rows.sort()
+        for left, right in zip(rows, rows[1:]):
+            if left[3] is not None and 7 * 3600 <= left[3] < 10 * 3600 and right[3] is not None and 10 <= right[3] - left[3] <= 7200:
+                historic_edges[(left[1], right[1])].append(right[3] - left[3])
+    current_edges = defaultdict(lambda: [0, 0])
+    for (rid, _di, left, right), (total, count) in stats.items():
+        current_edges[(rid, left, right)][0] += total
+        current_edges[(rid, left, right)][1] += count
+    manifest = json.loads((root / "config/berlin-sbahn-patterns.json").read_text(encoding="utf-8"))
+    repairs = []
+    for pattern_index, pattern in enumerate(manifest["patterns"]):
+        line = pattern["line"]
+        sequence = pattern["stations"]
+        # Northbound trains temporarily skip Wollankstraße in September 2026.
+        sequence = list(sequence)
+        for i in range(len(sequence) - 1, 0, -1):
+            if {sequence[i - 1], sequence[i]} == {"de:11000:900110011", "de:11000:900085201"}:
+                sequence.insert(i, "de:11000:900130003")
+        for reverse in range(1 if pattern.get("circular") else 2):
+            ids = sequence[::-1] if reverse else sequence[:]
+            runtimes, provenance = [], []
+            for left, right in zip(ids, ids[1:]):
+                edge = (line, left, right)
+                samples = current_edges.get(edge)
+                restore = right == "de:11000:900130003" and left == "de:11000:900110011" or left == "de:11000:900130003" and right == "de:11000:900085201"
+                if samples and samples[1] and not restore:
+                    runtime = round(samples[0] / samples[1])
+                    provenance.append("VBB 2026-09-02")
+                else:
+                    samples = historic_edges.get((left, right))
+                    if not samples:
+                        raise ValueError(f"No official runtime for {line}: {left} -> {right}")
+                    runtime = round(sum(samples) / len(samples))
+                    provenance.append("VBB 2021")
+                    repairs.append({"line": line, "from": left, "to": right, "seconds": runtime})
+                runtimes.append(runtime)
+            did = f"{line}:{pattern_index}:{reverse}"
+            direction = {"id": did, "branchId": did, "routeId": line,
+                "label": station_meta[ids[-1]]["name"], "gtfsDirectionId": str(reverse),
+                "stations": ids, "runtimes": runtimes, "frequencyGroup": pattern["frequencyGroup"],
+                "stopPattern": {"kind": "scheduled", "servesEveryListedStop": True,
+                    "source": pattern["topologySource"], "runtimeSources": provenance,
+                    "waitSource": manifest["sources"]["regularTimetable"]}}
+            if pattern.get("circular"):
+                # Two unrolled laps allow any boarding station to cross the
+                # serialization seam without a fictitious transfer or reverse.
+                ring = ids[:-1]
+                direction.update(stations=ring + ring, runtimes=(runtimes * 2)[:-1],
+                    circular=True, ringStationCount=len(ring),
+                    label="Ringbahn clockwise ↻" if line == "S41" else "Ringbahn counterclockwise ↺")
+                direction["stopPattern"]["runtimeSources"] = (provenance * 2)[:-1]
+            directions[did] = direction
+            waits[did] = pattern["waitSeconds"]
+            route_waits[line] = max(route_waits.get(line, 0), pattern["waitSeconds"])
+            used.update(ids)
+    stations = {sid: station_meta[sid] for sid in sorted(used)}
+    for station in stations.values():
+        station["withinBerlinState"] = is_within_puzzle_boundary(station)
+    transfers = b.read_transfers(stop_to_station, used)
+    # Explicit interchanges drawn on the official S+U map. Their GTFS parents
+    # remain distinct; these are modeled walks, never proximity equivalences.
+    for left, right, seconds in [
+        ("de:11000:900029101", "de:11000:900029302", 300),  # Spandau / Rathaus
+        ("de:11000:900024101", "de:11000:900024202", 300),  # Charlottenburg / Wilmersdorfer
+        ("de:11000:900024106", "de:11000:900026202", 300),  # Messe Nord/ZOB / Kaiserdamm
+        ("de:11000:900057102", "de:11000:900058103", 300),  # Yorckstraße S1 / U7, S2/25/26
+    ]:
+        transfers.setdefault(left, {})[right] = seconds
+        transfers.setdefault(right, {})[left] = seconds
+    route_transfers = b.read_route_transfers(stop_to_station, raw_stop_routes, routes, used)
+    return {"stations": stations, "routes": routes, "directions": directions,
+        "transfers": transfers, "routeTransfers": route_transfers,
+        "waitSecondsByDirection": waits, "waitSecondsByRoute": route_waits,
+        "canonicalStationIds": {sid: sid for sid in stations}, "stationEquivalents": [],
+        "metadata": {"normalNetworkRepairs": repairs, "regularServiceSources": manifest["sources"],
+            "endpointBoundary": "ALKIS Berlin Landesgrenze, EPSG:4326, retrieved 2026-09-03",
+            "frequencyModel": "Regular weekday service frequencies; alternative termini share a frequency group; independent peak trains add frequency only over the entire matching ride."}}

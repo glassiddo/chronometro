@@ -3,7 +3,7 @@
   "id": "berlin",
   "name": "Berlin",
   "gameTitle": "Chronométro",
-  "networkTitle": "Berlin U-Bahn network",
+  "networkTitle": "Berlin U-Bahn and S-Bahn network",
   "timezone": "Europe/Berlin",
   "locale": "de-DE",
   "source": {
@@ -22,39 +22,115 @@
   },
   "attribution": {
     "display": "Verkehrsverbund Berlin-Brandenburg (VBB)",
-    "disclaimer": "Schedule data provided by Verkehrsverbund Berlin-Brandenburg (VBB) under CC BY 4.0. Chronométro is independently made and is not affiliated with or endorsed by VBB or BVG. Representative full-network schedule; no live arrivals or disruption data."
+    "disclaimer": "Schedule data provided by Verkehrsverbund Berlin-Brandenburg (VBB) under CC BY 4.0. Chronométro is independently made and is not affiliated with or endorsed by VBB, BVG, or S-Bahn Berlin GmbH. Representative full-network schedule; no live arrivals or disruption data. State boundary: Geoportal Berlin, ALKIS Landesgrenze (dl-de-zero-2.0)."
   },
   "modes": {
-    "ubahn": {"label": "U-Bahn", "defaultWaitSeconds": 150, "maximumWaitSeconds": 600}
+    "ubahn": {
+      "label": "U-Bahn",
+      "defaultWaitSeconds": 150,
+      "maximumWaitSeconds": 600
+    },
+    "sbahn": {
+      "label": "S-Bahn",
+      "defaultWaitSeconds": 600,
+      "maximumWaitSeconds": 600
+    }
   },
   "timing": {
     "peakStartSeconds": 25200,
     "peakEndSeconds": 36000,
     "minimumWaitSeconds": 30,
-    "transferDefaultsSeconds": {"same_mode": 180, "fallback": 180},
+    "transferDefaultsSeconds": {
+      "same_mode": 180,
+      "fallback": 180
+    },
     "stationEquivalenceDistanceMetres": 0,
     "stationEquivalenceTransferSeconds": 0
   },
   "network": {
     "maximumDirectionsPerRoute": 16,
-    "shortTurnModes": ["ubahn"],
-    "sharedServiceGroups": [],
+    "shortTurnModes": [
+      "ubahn"
+    ],
+    "sharedServiceGroups": [
+      {
+        "routeIds": [
+          "S1",
+          "S15",
+          "S2",
+          "S25",
+          "S26",
+          "S3",
+          "S41",
+          "S42",
+          "S46",
+          "S47",
+          "S5",
+          "S7",
+          "S75",
+          "S8",
+          "S85",
+          "S9"
+        ]
+      },
+      {
+        "routeIds": [
+          "17512_400",
+          "17515_400"
+        ]
+      }
+    ],
     "routeContinuations": [],
-    "walkingTransfers": {"allowAll": true}
+    "walkingTransfers": {
+      "allowAll": true
+    },
+    "combinePatternsWithinRoutes": [
+      "S1",
+      "S15",
+      "S2",
+      "S25",
+      "S26",
+      "S3",
+      "S41",
+      "S42",
+      "S46",
+      "S47",
+      "S5",
+      "S7",
+      "S75",
+      "S8",
+      "S85",
+      "S9"
+    ],
+    "exactRideRouting": true
   },
   "puzzles": {
-    "startDate": "2026-09-05",
-    "days": 57,
+    "startDate": "2026-10-05",
+    "days": 27,
     "dailyCount": 5,
     "exampleCount": 100,
     "minimumRouteDistanceMetres": 2000,
     "minimumEndpointDistanceMetres": 1500,
-    "endpointModes": ["ubahn"],
-    "boundedEndpointModes": [],
-    "bounds": {"minLat": 52.39, "maxLat": 52.68, "minLon": 13.08, "maxLon": 13.64},
+    "endpointModes": [
+      "ubahn"
+    ],
+    "boundedEndpointModes": [
+      "sbahn"
+    ],
+    "bounds": {
+      "minLat": 52.39,
+      "maxLat": 52.68,
+      "minLon": 13.08,
+      "maxLon": 13.64
+    },
     "excludeSameComplexEndpoints": true,
     "requireInterchangeEndpoints": false,
-    "seedNamespace": "chronometro-berlin-ubahn-v1"
+    "seedNamespace": "chronometro-berlin-usbahn-v2",
+    "dailyModeMix": [
+      "ubahn",
+      "mixed",
+      "sbahn"
+    ]
   },
   "paths": {
     "network": "public/data/berlin/network.json",

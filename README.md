@@ -52,12 +52,12 @@ Complete scheduled `stop_times.txt` patterns preserve the terminal branches, sha
 
 ### Berlin
 
-- All nine regular U-Bahn lines: U1–U9
-- 175 playable VBB parent stations in the representative full network
-- Excludes temporary U12 service, S-Bahn, trams, buses, ferries, regional rail, and long-distance rail
-- Daily puzzles from 5 September through 31 October 2026
+- U1–U9 and all 16 regular S-Bahn lines, including S15; 316 distinct VBB parent stations
+- All S-Bahn branches remain available for routing, including Brandenburg; S-Bahn puzzle endpoints are restricted to the official Berlin state polygon
+- Excludes temporary U12, discontinued S45, diversions, replacement buses, trams, ferries, regional and long-distance rail
+- Active daily puzzles: 5–31 October 2026, with U-Bahn-only, mixed, and S-Bahn-only solutions every day; all require a transfer
 
-Complete scheduled GTFS trip patterns supply the regular U1–U9 topology. Because the current U6 is temporarily closed north of Kurt-Schumacher-Platz, its normal five-station extension to Alt-Tegel is restored from VBB's official 2021 GTFS archive. Replacement buses and temporary U12 service are excluded.
+The normal network combines VBB scheduled patterns with the official regular S-Bahn timetable. VBB’s 2021 archive restores U6 north and the northbound Wollankstraße stop on S1, S25, and S85. S41 runs clockwise and S42 counterclockwise, including across the stored ring seam. See [Berlin data and verification](docs/berlin-data.md).
 
 ## Data sources
 
@@ -114,12 +114,12 @@ Station IDs are WMATA parent-station IDs, so child platforms, entrances, directi
 Berlin uses the official VBB static GTFS package:
 
 - feed: `https://unternehmen.vbb.de/gtfs`
-- primary snapshot downloaded 2 September 2026; the normally operating U6 north segment comes from VBB's official 2021 archive
+- primary snapshot downloaded 2 September 2026; U6 north and northbound Wollankstraße are restored from VBB's official 2021 archive
 - calendar validity represented by the selected records: 1 September through 12 December 2026
-- weekday 07:00–10:00 departures supply expected waits
+- weekday 07:00–10:00 departures supply U-Bahn waits; the official regular timetable supplies S-Bahn service frequencies
 - consecutive `stop_times.txt` values supply ride times; ordinary same-station changes use three minutes
 
-VBB publishes all Berlin and Brandenburg transport in one feed. The adapter requires BVG agency ID `796`, extended route type `400`, and one of the exact U1–U9 labels. Temporary U12 and every non-U-Bahn mode are excluded. Playable stations normalize through explicit GTFS `parent_station`; no geographic-proximity transfers are added. The resulting bundle models the normal full infrastructure rather than disruptions on one date.
+VBB publishes all Berlin and Brandenburg transport in one feed. The adapter accepts BVG agency `796` / type `400` / U1–U9 and S-Bahn Berlin agency `1` / type `109` / the 16 regular S-Bahn labels. Public S-Bahn lines are normalized across timetable-specific route IDs. A reviewed service manifest excludes diversions and records independent peak trains and alternative branches. Stations normalize through GTFS `parent_station`; four documented interchanges between distinct parents use explicit five-minute walks. S-Bahn waits use the official regular service frequencies, combined only for trains that serve the entire chosen ride. Berlin’s search uses these costs before selecting the optimum.
 
 No city uses live service status, disruptions, closures, fares, accessibility, crowding, or real-time departure information.
 
@@ -175,6 +175,7 @@ python scripts/validate_city_schema.py boston
 python scripts/verify_timing_model.py boston
 python scripts/verify_boston_network.py
 python scripts/verify_berlin_network.py
+node scripts/verify_berlin_frontend.js
 python scripts/check_auteuil_route.py
 ```
 
@@ -198,12 +199,12 @@ To refresh Berlin, download and extract VBB's official GTFS package into the ign
 
 The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Some branch-specific wait variation, route-pair-specific interchange times, and service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. November and December puzzles continue to use the fixed representative snapshot even though its source calendar expires on 31 October 2026.
 
-Berlin uses the archived full U6 north segment and excludes replacement buses and temporary U12 service.
+Berlin restores U6 north and northbound Wollankstraße from the archive. S-Bahn ride times use morning departure-to-departure intervals, including dwell at the destination; U-Bahn retains its existing arrival-minus-departure convention. Frequencies represent regular morning service, with alternative S85 termini available at their own regular frequency without double counting their common section. This is a fixed normal-network puzzle model, not a timetable for a particular departure.
 
 ## Attribution
 
 Paris data: Île-de-France Mobilités and ITO World. London data: Transport for London. Chicago: Data provided by Chicago Transit Authority, subject to CTA's Developer License Agreement and trademark guidelines. Washington: Schedule data provided by WMATA, subject to the [WMATA Transit Data Terms of Use](https://developer.wmata.com/license). Boston: Schedule data provided by MassDOT/MBTA under the [MassDOT Developers License Agreement](https://www.mass.gov/doc/developers-license-agreement-11132009/download); Chronométro uses no MBTA logo or official map and is not affiliated with or endorsed by MassDOT or the MBTA.
 
-Berlin data: Verkehrsverbund Berlin-Brandenburg (VBB), under CC BY 4.0.
+Berlin data: Verkehrsverbund Berlin-Brandenburg (VBB), under CC BY 4.0; regular service information from S-Bahn Berlin GmbH. State boundary: Geoportal Berlin / Senatsverwaltung für Stadtentwicklung, Bauen und Wohnen, ALKIS Landesgrenze, dl-de-zero-2.0.
 
 Chronométro is independent and is not affiliated with or endorsed by RATP, Île-de-France Mobilités, Transport for London, the Chicago Transit Authority, WMATA, VBB, BVG, or the other operators and data providers represented in the game. It is neither made nor endorsed by the CTA, WMATA, VBB, or BVG. No operator logos, branding, or official maps are used; official route names and colors identify service.

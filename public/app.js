@@ -17,7 +17,7 @@ const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
-const DATA_REVISION = "20260903-six-cities";
+const DATA_REVISION = CITY_ID === "berlin" ? "20260903-berlin-sbahn" : "20260903-six-cities";
 const BOSTON_BASEMAP_URL = "./data/boston/coastline.svg?v=20260903";
 
 const state = {
@@ -248,7 +248,7 @@ function ridePathStationIds(step) {
   const dir = direction(step.directionId);
   if (!dir) return [];
   const fromIndex = dir.stations.indexOf(step.from);
-  const toIndex = dir.stations.indexOf(step.to);
+  const toIndex = dir.stations.indexOf(step.to, fromIndex + 1);
   if (fromIndex >= 0 && toIndex > fromIndex) return dir.stations.slice(fromIndex, toIndex + 1);
   const continuation = routeContinuation(step.directionId);
   if (!continuation || fromIndex < 0 || dir.stations[dir.stations.length - 1] !== continuation.stationId) return [];
@@ -2024,7 +2024,7 @@ function configureCityMap() {
       : isWashington
         ? { minLat: 38.76, maxLat: 39.13, minLon: -77.50, maxLon: -76.83 }
         : isBerlin
-          ? { minLat: 52.39, maxLat: 52.68, minLon: 13.08, maxLon: 13.64 }
+          ? { minLat: 52.28, maxLat: 52.78, minLon: 12.98, maxLon: 13.96 }
       : { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
     outline: [],
     parks: [],
@@ -2305,9 +2305,10 @@ function combinedWaitSeconds(directionId, routeId, fromStation, toStation, baseW
   const endIndex = dir.stations.indexOf(toStation, startIndex + 1);
   if (startIndex < 0 || endIndex <= startIndex) return wait;
   const rideStations = dir.stations.slice(startIndex, endIndex + 1);
-  const waitsByRoute = new Map([[routeId, wait]]);
+  const waitsByRoute = new Map([[dir.frequencyGroup || routeId, wait]]);
   Object.values(state.data.directions).forEach((candidate) => {
-    if (candidate.routeId === routeId || !group.routeIds.includes(candidate.routeId)) return;
+    if (candidate.id === directionId || !group.routeIds.includes(candidate.routeId)) return;
+    if (candidate.routeId === routeId && !candidate.frequencyGroup) return;
     const width = rideStations.length;
     const matches = candidate.stations.some((_, index) =>
       index + width <= candidate.stations.length &&
@@ -2316,7 +2317,8 @@ function combinedWaitSeconds(directionId, routeId, fromStation, toStation, baseW
     if (!matches) return;
     const candidateRoute = route(candidate.routeId);
     const candidateWait = waitSeconds(candidate.id, candidate.routeId, candidateRoute.mode);
-    waitsByRoute.set(candidate.routeId, Math.min(candidateWait, waitsByRoute.get(candidate.routeId) ?? candidateWait));
+    const serviceKey = candidate.frequencyGroup || candidate.routeId;
+    waitsByRoute.set(serviceKey, Math.min(candidateWait, waitsByRoute.get(serviceKey) ?? candidateWait));
   });
   if (waitsByRoute.size === 1) return wait;
   return Math.round(1 / [...waitsByRoute.values()].reduce((sum, candidateWait) => sum + 1 / candidateWait, 0));
@@ -2620,7 +2622,8 @@ function renderAlightStep() {
   directionCandidates.forEach((candidate) => {
     const candidateDir = direction(candidate.dirId);
     const boardIndex = candidateDir.stations.indexOf(candidate.boardStation);
-    const downstream = candidateDir.stations.slice(boardIndex + 1);
+    const downstream = candidateDir.stations.slice(boardIndex + 1,
+      candidateDir.circular ? boardIndex + candidateDir.ringStationCount : undefined);
     const continuation = routeContinuation(candidate.dirId);
     if (continuation && candidateDir.stations[candidateDir.stations.length - 1] === continuation.stationId) {
       downstream.push(...direction(continuation.toDirectionId).stations.slice(1));
@@ -2699,7 +2702,7 @@ function renderAlightStep() {
 function runtimeBetween(dirId, fromStation, toStation) {
   const dir = direction(dirId);
   const fromIndex = dir.stations.indexOf(fromStation);
-  const toIndex = dir.stations.indexOf(toStation);
+  const toIndex = dir.stations.indexOf(toStation, fromIndex + 1);
   if (fromIndex < 0) return null;
   if (toIndex > fromIndex) return dir.runtimes.slice(fromIndex, toIndex).reduce((sum, sec) => sum + sec, 0);
 
@@ -2743,7 +2746,7 @@ function bestEquivalentDirectionCandidate(selected, toStation) {
 function rideSegmentsBetween(dirId, fromStation, toStation) {
   const dir = direction(dirId);
   const fromIndex = dir.stations.indexOf(fromStation);
-  const toIndex = dir.stations.indexOf(toStation);
+  const toIndex = dir.stations.indexOf(toStation, fromIndex + 1);
   if (fromIndex >= 0 && toIndex > fromIndex) return [{ directionId: dirId, from: fromStation, to: toStation }];
 
   const continuation = routeContinuation(dirId);
@@ -3186,6 +3189,18 @@ async function loadExamplePuzzleSet(today) {
 }
 
 async function loadPuzzleSet(today = cityDateString()) {
+  if (CITY_ID === "berlin") {
+    const index = await fetchJson(DAILY_INDEX_URL);
+    const requestedDate = new URLSearchParams(window.location.search).get("date");
+    const activeDate = index?.dates?.includes(requestedDate)
+      ? requestedDate : nearestDailyDate(index?.dates, today);
+    if (activeDate) {
+      const data = await fetchJson(`${DAILY_BASE_URL}/${activeDate}.json`);
+      const puzzleSet = puzzleSetFromDailyData(data, activeDate);
+      if (puzzleSet) return puzzleSet;
+    }
+    return loadExamplePuzzleSet(today);
+  }
   const todayData = await fetchJson(`${DAILY_BASE_URL}/${today}.json`);
   const todayPuzzleSet = puzzleSetFromDailyData(todayData, today);
   if (todayPuzzleSet) return todayPuzzleSet;
@@ -3208,7 +3223,7 @@ function showLoadingState() {
 function updateCityChrome() {
   const city = state.data.metadata.city;
   $("#citySelector").value = CITY_ID;
-  $("#cityKicker").textContent = "Daily route puzzle";
+  $("#cityKicker").textContent = CITY_ID === "berlin" ? "Berlin U-Bahn + S-Bahn · Daily route puzzle" : "Daily route puzzle";
   $("#cityDisclaimer").textContent = city.attribution.disclaimer;
   document.title = `Chronométro — ${city.name}`;
   document.documentElement.dataset.city = CITY_ID;
