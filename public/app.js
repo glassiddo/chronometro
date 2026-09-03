@@ -1,8 +1,16 @@
 const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc"]);
 const requestedCityId = new URLSearchParams(window.location.search).get("city");
 const CITY_ID = SUPPORTED_CITY_IDS.has(requestedCityId) ? requestedCityId : "paris";
+const CITY_TIMEZONES = {
+  paris: "Europe/Paris",
+  london: "Europe/London",
+  chicago: "America/Chicago",
+  "washington-dc": "America/New_York",
+  boston: "America/New_York",
+};
 const CITY_DATA_URL = `./data/${CITY_ID}`;
 const NETWORK_URL = `${CITY_DATA_URL}/network.json`;
+const RIVERS_URL = `${CITY_DATA_URL}/rivers.json?map=20260903-linked`;
 const DAILY_INDEX_URL = `${CITY_DATA_URL}/daily/index.json`;
 const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
@@ -12,6 +20,7 @@ const DATA_REVISION = "20260831-london-dlr-preview-rer-b-fixes";
 
 const state = {
   data: null,
+  rivers: [],
   daily: [],
   dailyDate: "",
   dailyKind: "",
@@ -146,7 +155,7 @@ function stepType(step) {
 
 function cityDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: state.data?.metadata?.city?.timezone || "UTC",
+    timeZone: state.data?.metadata?.city?.timezone || CITY_TIMEZONES[CITY_ID],
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -1990,72 +1999,6 @@ const PARIS_MAP = {
       ]
     ]
   ],
-  "waterway": [
-    [
-      2.224,
-      48.842
-    ],
-    [
-      2.238,
-      48.842
-    ],
-    [
-      2.252,
-      48.845
-    ],
-    [
-      2.266,
-      48.849
-    ],
-    [
-      2.281,
-      48.852
-    ],
-    [
-      2.296,
-      48.857
-    ],
-    [
-      2.31,
-      48.861
-    ],
-    [
-      2.323,
-      48.862
-    ],
-    [
-      2.337,
-      48.858
-    ],
-    [
-      2.35,
-      48.853
-    ],
-    [
-      2.363,
-      48.848
-    ],
-    [
-      2.377,
-      48.842
-    ],
-    [
-      2.391,
-      48.836
-    ],
-    [
-      2.405,
-      48.829
-    ],
-    [
-      2.42,
-      48.823
-    ],
-    [
-      2.438,
-      48.817
-    ]
-  ]
 };
 
 let CITY_MAP = PARIS_MAP;
@@ -2081,9 +2024,6 @@ function configureCityMap() {
     waterbody: isChicago
       ? [[-87.595,41.70],[-87.600,41.76],[-87.612,41.82],[-87.625,41.88],[-87.613,41.94],[-87.600,42.01],[-87.592,42.08],[-87.51,42.08],[-87.51,41.70]]
       : [],
-    waterway: isChicago ? [] : isWashington
-      ? [[-77.12,39.02],[-77.10,38.99],[-77.08,38.96],[-77.06,38.93],[-77.05,38.90],[-77.04,38.88],[-77.02,38.86],[-77.00,38.84],[-77.00,38.80]]
-      : [[-0.52,51.462],[-0.45,51.470],[-0.38,51.482],[-0.31,51.475],[-0.25,51.470],[-0.20,51.480],[-0.16,51.494],[-0.12,51.503],[-0.08,51.505],[-0.04,51.493],[0.01,51.486],[0.07,51.491],[0.14,51.501],[0.25,51.500]],
   };
 }
 
@@ -2204,6 +2144,15 @@ function networkContextMapMarkup() {
   return `<path class="map-network-context map-network-context--${CITY_ID}" d="${segments.join(" ")}"></path>`;
 }
 
+function riverMapMarkup() {
+  return state.rivers.map((river) => {
+    const points = river.points.map(([lon, lat]) => mapPoint({ lat, lon }, false));
+    const path = points.map((point, index) =>
+      `${index ? "L" : "M"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
+    return `<path class="waterway" d="${path}"></path>`;
+  }).join("");
+}
+
 function orientationMapMarkup() {
   const puzzle = currentPuzzle();
   fitCityMapToPuzzle();
@@ -2221,12 +2170,13 @@ function orientationMapMarkup() {
         ${CITY_MAP.airport ? `<path class="map-airport" d="${mapCurvePath(CITY_MAP.airport, true)}"></path>` : ""}
         ${CITY_MAP.outline.length ? `<path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>` : ""}
         ${CITY_MAP.waterbody?.length ? `<path class="waterbody" d="${mapCurvePath(CITY_MAP.waterbody, true)}"></path>` : ""}
-        ${CITY_MAP.waterway.length ? `<path class="waterway" d="${mapCurvePath(CITY_MAP.waterway)}"></path>` : ""}
+        ${riverMapMarkup()}
         ${networkContextMapMarkup()}
         ${mapMarker(puzzle.start, "Start", "start-marker")}
         ${mapMarker(puzzle.end, "End", "end-marker")}
         ${current}
       </svg>
+      <figcaption class="map-attribution">Rivers © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></figcaption>
     </figure>
   `;
 }
@@ -3244,12 +3194,16 @@ async function init() {
   $("#homeButton").addEventListener("click", () => {
     if (state.data) restartDay();
   });
-  state.data = await fetchJson(NETWORK_URL);
+  const [network, puzzleSet, riverData] = await Promise.all([
+    fetchJson(NETWORK_URL),
+    loadPuzzleSet(cityDateString()),
+    fetchJson(RIVERS_URL),
+  ]);
+  state.data = network;
+  state.rivers = riverData?.rivers || [];
   if (!state.data) throw new Error("Network load failed");
   configureCityMap();
   updateCityChrome();
-  const today = cityDateString();
-  const puzzleSet = await loadPuzzleSet(today);
   state.daily = puzzleSet.puzzles;
   state.dailyDate = puzzleSet.date;
   state.dailyKind = puzzleSet.kind;
