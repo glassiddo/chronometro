@@ -2,7 +2,7 @@
 
 <img width="935" height="622" alt="image" src="https://github.com/user-attachments/assets/b7decbbe-b953-4313-adb7-9672a4e81325" />
 
-Chronométro is a daily transit-route puzzle for Paris, London, Chicago, and Washington, DC. Players build a route between two stations and score up to 100 points according to its modeled journey time relative to the fastest stored route.
+Chronométro is a daily route puzzle. Players build a route between two stations and score up to 100 points according to its modeled journey time relative to the fastest stored route.
 
 Play at [chronometro.cc](https://chronometro.cc/).
 
@@ -94,6 +94,7 @@ No city uses live service status, disruptions, closures, fares, accessibility, c
 - `public/data/london/` — London network, examples, and daily puzzles
 - `public/data/chicago/` — Chicago network, examples, and daily puzzles
 - `public/data/washington-dc/` — Washington network, examples, and daily puzzles
+- `public/data/boston/` — Boston network, examples, and daily puzzles
 - `config/cities/` — city coverage, timing assumptions, output paths, and attribution
 - `scripts/build_city.py` — city-neutral build entry point
 - `scripts/build_data.py` — shared normalization, routing, timing, and puzzle generation
@@ -113,6 +114,7 @@ python scripts/build_city.py paris --mode release
 python scripts/build_city.py london --mode release
 python scripts/build_city.py chicago --mode release
 python scripts/build_city.py washington-dc --mode release
+python scripts/build_city.py boston --mode release
 ```
 
 Useful incremental build modes include `network`, `all-pairs`, `example`, and `daily-range`.
@@ -129,6 +131,9 @@ python scripts/verify_timing_model.py washington-dc
 python scripts/verify_london_network.py
 python scripts/verify_chicago_network.py
 python scripts/verify_washington_network.py
+python scripts/validate_city_schema.py boston
+python scripts/verify_timing_model.py boston
+python scripts/verify_boston_network.py
 python scripts/check_auteuil_route.py
 ```
 
@@ -144,12 +149,14 @@ To refresh Chicago, download and extract CTA's current `google_transit.zip` into
 
 To refresh Washington, register for a WMATA developer key, download and extract the official `rail-gtfs-static.zip` into ignored `gouv_washington_dc_gtfs-export/`, and run the Washington release and verification commands.
 
+To refresh Boston, download and extract `https://cdn.mbta.com/MBTA_GTFS.zip` into ignored `gouv_boston_gtfs-export/`. The committed snapshot was downloaded 31 August 2026: feed `mbta-ma-us`, version `Fall 2026, 2026-08-28T13:45:01+00:00, version D`, valid 21 August–12 December 2026. It includes Red, Orange, Blue, Green B/C/D/E, and Mattapan only. Silver Line is excluded because it is bus service despite its rapid-transit branding; all other buses, shuttles, Commuter Rail, ferries, CapeFLYER, Amtrak, and non-MBTA operators are excluded. Platforms collapse only through explicit parents. The only distinct-station walk is the documented Winter Street Concourse, modeled as five minutes between Park Street and Downtown Crossing. Waits use half the median 07:00–10:00 scheduled gap for the representative weekday, separately by complete pattern. Later puzzles remain a fixed snapshot after feed expiry. See `docs/boston-data.md` for reproducibility details.
+
 ## Timing limitations
 
 The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Some branch-specific wait variation, route-pair-specific interchange times, and service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. November and December puzzles continue to use the fixed representative snapshot even though its source calendar expires on 31 October 2026.
 
 ## Attribution
 
-Paris data: Île-de-France Mobilités and ITO World. London data: Transport for London. Chicago: Data provided by Chicago Transit Authority, subject to CTA's Developer License Agreement and trademark guidelines. Washington: Schedule data provided by WMATA, subject to the [WMATA Transit Data Terms of Use](https://developer.wmata.com/license).
+Paris data: Île-de-France Mobilités and ITO World. London data: Transport for London. Chicago: Data provided by Chicago Transit Authority, subject to CTA's Developer License Agreement and trademark guidelines. Washington: Schedule data provided by WMATA, subject to the [WMATA Transit Data Terms of Use](https://developer.wmata.com/license). Boston: Schedule data provided by MassDOT/MBTA under the [MassDOT Developers License Agreement](https://www.mass.gov/doc/developers-license-agreement-11132009/download); Chronométro uses no MBTA logo or official map and is not affiliated with or endorsed by MassDOT or the MBTA.
 
 Chronométro is independent and is not affiliated with or endorsed by RATP, Île-de-France Mobilités, Transport for London, the Chicago Transit Authority, WMATA, or the other operators and data providers represented in the game. It is neither made nor endorsed by the CTA or WMATA. No CTA or WMATA logos, branding, or official maps are used; official route names and colors identify service.

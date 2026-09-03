@@ -145,6 +145,22 @@ def station_distance_m(left: dict, right: dict) -> float | None:
 
 def read_weekday_services() -> set[str]:
     services = set()
+    representative = CITY_CONFIG["source"].get("representativeServiceDate")
+    if representative:
+        target = datetime.strptime(representative, "%Y-%m-%d").date()
+        for row in read_csv("calendar.txt"):
+            start = datetime.strptime(row["start_date"], "%Y%m%d").date()
+            end = datetime.strptime(row["end_date"], "%Y%m%d").date()
+            day_key = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"][target.weekday()]
+            if start <= target <= end and row.get(day_key) == "1":
+                services.add(row["service_id"])
+        for row in read_csv("calendar_dates.txt"):
+            if row.get("date") != target.strftime("%Y%m%d"):
+                continue
+            if row.get("exception_type") == "1": services.add(row["service_id"])
+            elif row.get("exception_type") == "2": services.discard(row["service_id"])
+        log(f"service ids active on representative date {representative}: {len(services)}")
+        return services
     calendar_path = GTFS / "calendar.txt"
     if calendar_path.exists():
         for row in read_csv("calendar.txt"):
@@ -260,12 +276,16 @@ def read_stops() -> tuple[dict[str, str], dict[str, dict]]:
     return stop_to_station, station_meta
 
 
-def read_trips(routes: dict[str, dict]) -> dict[str, dict]:
+def read_trips(routes: dict[str, dict], weekday_services: set[str] | None = None) -> dict[str, dict]:
     trips = {}
     by_route = Counter()
     for row in read_csv("trips.txt"):
         route_id = row["route_id"]
         if route_id not in routes:
+            continue
+        if CITY_CONFIG["source"].get("filterTripsToRepresentativeServices") and weekday_services and row.get("service_id") not in weekday_services:
+            continue
+        if hasattr(SOURCE_ADAPTER, "include_trip") and not SOURCE_ADAPTER.include_trip(row, GTFS):
             continue
         trips[row["trip_id"]] = {
             "routeId": route_id,
@@ -1519,7 +1539,7 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
     routes = read_routes()
     stop_to_station, all_station_meta = read_stops()
     weekday_services = read_weekday_services()
-    trips = read_trips(routes)
+    trips = read_trips(routes, weekday_services)
     segment_stats, pattern_counts, pattern_headsigns, pattern_peak_departures, raw_stop_routes = read_stop_times(
         trips, stop_to_station, weekday_services
     )

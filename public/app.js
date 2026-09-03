@@ -1,4 +1,4 @@
-const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc"]);
+const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc", "boston"]);
 const requestedCityId = new URLSearchParams(window.location.search).get("city");
 const CITY_ID = SUPPORTED_CITY_IDS.has(requestedCityId) ? requestedCityId : "paris";
 const CITY_TIMEZONES = {
@@ -17,6 +17,7 @@ const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
 const DATA_REVISION = "20260831-london-dlr-preview-rer-b-fixes";
+const BOSTON_BASEMAP_URL = "./data/boston/coastline.svg?v=20260903";
 
 const state = {
   data: null,
@@ -207,7 +208,7 @@ function routeDisplayName(r) {
 }
 
 function routeChoiceLabel(r) {
-  if (["london", "chicago", "washington-dc"].includes(CITY_ID)) return routeDisplayName(r);
+  if (["london", "chicago", "washington-dc", "boston"].includes(CITY_ID)) return routeDisplayName(r);
   return `${modeName(r.mode)} ${r.label}`;
 }
 
@@ -2010,10 +2011,13 @@ function configureCityMap() {
   }
   const isChicago = CITY_ID === "chicago";
   const isWashington = CITY_ID === "washington-dc";
+  const isBoston = CITY_ID === "boston";
   CITY_MAP = {
     width: 320,
     height: 220,
-    bounds: isChicago
+    bounds: isBoston
+      ? { minLat: 42.19, maxLat: 42.46, minLon: -71.33, maxLon: -70.78 }
+      : isChicago
       ? { minLat: 41.70, maxLat: 42.08, minLon: -87.91, maxLon: -87.54 }
       : isWashington
         ? { minLat: 38.76, maxLat: 39.13, minLon: -77.50, maxLon: -76.83 }
@@ -2021,14 +2025,37 @@ function configureCityMap() {
     outline: [],
     parks: [],
     airport: null,
-    waterbody: isChicago
+    basemap: isBoston ? BOSTON_BASEMAP_URL : null,
+    waterbody: isBoston
+      ? []
+      : isChicago
       ? [[-87.595,41.70],[-87.600,41.76],[-87.612,41.82],[-87.625,41.88],[-87.613,41.94],[-87.600,42.01],[-87.592,42.08],[-87.51,42.08],[-87.51,41.70]]
       : [],
   };
 }
 
 function fitCityMapToPuzzle() {
-  if (CITY_ID === "paris" || CITY_ID === "chicago" || CITY_ID === "washington-dc") {
+  if (CITY_ID === "boston") {
+    const puzzle = currentPuzzle();
+    const points = [station(puzzle.start), station(puzzle.end), station(state.currentStation)]
+      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
+    const lats = points.map((point) => point.lat);
+    const lons = points.map((point) => point.lon);
+    const bounds = CITY_MAP.bounds;
+    const aspect = (bounds.maxLon - bounds.minLon) / (bounds.maxLat - bounds.minLat);
+    const latSpan = Math.min(bounds.maxLat - bounds.minLat, Math.max(
+      .16, (Math.max(...lats) - Math.min(...lats)) * 1.5,
+      (Math.max(...lons) - Math.min(...lons)) * 1.5 / aspect,
+    ));
+    const lonSpan = latSpan * aspect;
+    const minLat = Math.max(bounds.minLat, Math.min(bounds.maxLat - latSpan,
+      (Math.min(...lats) + Math.max(...lats) - latSpan) / 2));
+    const minLon = Math.max(bounds.minLon, Math.min(bounds.maxLon - lonSpan,
+      (Math.min(...lons) + Math.max(...lons) - lonSpan) / 2));
+    CITY_MAP.viewBounds = { minLat, maxLat: minLat + latSpan, minLon, maxLon: minLon + lonSpan };
+    return;
+  }
+  if (["paris", "chicago", "washington-dc", "boston"].includes(CITY_ID)) {
     CITY_MAP.viewBounds = CITY_MAP.bounds;
     return;
   }
@@ -2144,6 +2171,15 @@ function networkContextMapMarkup() {
   return `<path class="map-network-context map-network-context--${CITY_ID}" d="${segments.join(" ")}"></path>`;
 }
 
+function basemapMarkup() {
+  if (!CITY_MAP.basemap) return "";
+  const bounds = CITY_MAP.bounds;
+  const view = CITY_MAP.viewBounds || bounds;
+  const scale = (bounds.maxLon - bounds.minLon) / (view.maxLon - view.minLon);
+  const origin = mapPoint({ lon: bounds.minLon, lat: bounds.maxLat }, false);
+  return `<image href="${CITY_MAP.basemap}" x="${origin.x - 12 * scale}" y="${origin.y - 12 * scale}" width="${320 * scale}" height="${220 * scale}"></image>`;
+}
+
 function riverMapMarkup() {
   return state.rivers.map((river) => {
     const points = river.points.map(([lon, lat]) => mapPoint({ lat, lon }, false));
@@ -2166,9 +2202,11 @@ function orientationMapMarkup() {
         <title id="orientationMapTitle">${escapeHtml(state.data.metadata.city.name)} orientation map</title>
         <desc id="orientationMapDesc">A simplified city map with the start station and destination station.</desc>
         <rect class="map-bg" width="${CITY_MAP.width}" height="${CITY_MAP.height}" rx="6"></rect>
+        ${basemapMarkup()}
         ${CITY_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
         ${CITY_MAP.airport ? `<path class="map-airport" d="${mapCurvePath(CITY_MAP.airport, true)}"></path>` : ""}
         ${CITY_MAP.outline.length ? `<path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>` : ""}
+        ${(CITY_MAP.waterbodies || []).map((body) => `<path class="waterbody" d="${mapCurvePath(body, true)}"></path>`).join("")}
         ${CITY_MAP.waterbody?.length ? `<path class="waterbody" d="${mapCurvePath(CITY_MAP.waterbody, true)}"></path>` : ""}
         ${riverMapMarkup()}
         ${networkContextMapMarkup()}
@@ -2438,7 +2476,7 @@ function renderLineStep(message = "") {
   state.stage = "line";
   const options = boardingOptions();
   const walks = walkOptions();
-  const compactRouteChoices = ["chicago", "washington-dc"].includes(CITY_ID);
+  const compactRouteChoices = ["chicago", "washington-dc", "boston"].includes(CITY_ID);
   boardShell(`
     <div class="step-title">
       <h2>Choose your next move</h2>
@@ -3189,6 +3227,7 @@ function bindCitySelector() {
 }
 
 async function init() {
+  if (CITY_ID === "boston") new Image().src = BOSTON_BASEMAP_URL;
   showLoadingState();
   bindCitySelector();
   $("#homeButton").addEventListener("click", () => {

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "boston",
+  "name": "Boston",
+  "gameTitle": "Chronométro",
+  "networkTitle": "MBTA rapid transit network",
+  "timezone": "America/New_York",
+  "locale": "en-US",
+  "source": {
+    "type": "gtfs",
+    "directory": "gouv_boston_gtfs-export",
+    "adapter": "boston",
+    "publisher": "Massachusetts Bay Transportation Authority static GTFS",
+    "feedUrl": "https://cdn.mbta.com/MBTA_GTFS.zip",
+    "downloadDate": "2026-08-31",
+    "fallbackVersion": "Fall 2026, 2026-08-28T13:45:01+00:00, version D",
+    "fallbackValidFrom": "2026-08-21",
+    "fallbackValidTo": "2026-12-12",
+    "representativeServiceDate": "2026-09-02",
+    "filterTripsToRepresentativeServices": true
+  },
+  "attribution": {
+    "display": "Schedule data provided by MassDOT/MBTA",
+    "disclaimer": "Schedule data provided by MassDOT/MBTA. Chronométro is independently made and is not affiliated with, sponsored by, or endorsed by MassDOT or the MBTA. Static scheduled data only; no predictions, alerts, incidents, diversions, or real-time APIs."
+  },
+  "modes": {
+    "rapid_transit": {"label": "Rapid transit", "defaultWaitSeconds": 240, "maximumWaitSeconds": 900},
+    "light_rail": {"label": "Light rail", "defaultWaitSeconds": 300, "maximumWaitSeconds": 1200}
+  },
+  "timing": {
+    "peakStartSeconds": 25200,
+    "peakEndSeconds": 36000,
+    "minimumWaitSeconds": 30,
+    "transferDefaultsSeconds": {"same_mode": 180, "fallback": 240},
+    "stationEquivalenceDistanceMetres": 0,
+    "stationEquivalenceTransferSeconds": 0
+  },
+  "network": {
+    "maximumDirectionsPerRoute": 8,
+    "shortTurnModes": [],
+    "sharedServiceGroups": [],
+    "routeContinuations": [],
+    "excludedPatternTerminiByRoute": {},
+    "walkingTransfers": {"allowAll": false, "allowedStationPairs": [["place-pktrm", "place-dwnxg"]]}
+  },
+  "puzzles": {
+    "startDate": "2026-08-30",
+    "days": 63,
+    "dailyCount": 5,
+    "exampleCount": 100,
+    "minimumRouteDistanceMetres": 2000,
+    "minimumEndpointDistanceMetres": 1600,
+    "endpointModes": ["rapid_transit", "light_rail"],
+    "boundedEndpointModes": [],
+    "bounds": {"minLat": 42.20, "maxLat": 42.51, "minLon": -71.30, "maxLon": -70.98},
+    "excludeSameComplexEndpoints": true,
+    "requireInterchangeEndpoints": false,
+    "seedNamespace": "chronometro-boston-mbta-fall-2026-v1"
+  },
+  "paths": {
+    "network": "public/data/boston/network.json",
+    "allPairs": "public/data/boston/generated/all-pairs.json",
+    "example": "public/data/boston/example/puzzles.json",
+    "daily": "public/data/boston/daily"
+  }
+}
