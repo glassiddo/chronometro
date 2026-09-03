@@ -416,12 +416,17 @@ def contiguous_subsequence_start(candidate: tuple[str, ...], existing: tuple[str
 
 
 def remove_contained_short_turns(
-    items: list[tuple[int, tuple[str, str, tuple[str, ...]]]]
+    items: list[tuple[int, tuple[str, str, tuple[str, ...]]]],
+    preserved_endpoint_pairs: set[tuple[str, str]] | None = None,
 ) -> list[tuple[int, tuple[str, str, tuple[str, ...]]]]:
+    preserved_endpoint_pairs = preserved_endpoint_pairs or set()
     kept = []
     removed = 0
     for count, key in items:
         route_id, direction_id, stations = key
+        if (stations[0], stations[-1]) in preserved_endpoint_pairs:
+            kept.append((count, key))
+            continue
         is_short_turn = False
         for _other_count, other_key in items:
             other_route_id, other_direction_id, other_stations = other_key
@@ -471,7 +476,11 @@ def choose_patterns(
     for route_id, items in by_route.items():
         items.sort(reverse=True, key=lambda item: (item[0], len(item[1][2])))
         if routes[route_id]["mode"] in CITY_CONFIG["network"].get("shortTurnModes", []):
-            items = remove_contained_short_turns(items)
+            preserved_endpoint_pairs = {
+                tuple(pair)
+                for pair in CITY_CONFIG["network"].get("preservedPatternEndpointPairsByRoute", {}).get(route_id, [])
+            }
+            items = remove_contained_short_turns(items, preserved_endpoint_pairs)
             by_terminal = defaultdict(list)
             for count, key in items:
                 by_terminal[key[2][-1]].append((count, key))
@@ -479,6 +488,11 @@ def choose_patterns(
             for terminal_items in by_terminal.values():
                 terminal_items.sort(key=lambda item: (len(item[1][2]), item[0]), reverse=True)
                 kept.append(terminal_items[0])
+                kept.extend(
+                    item
+                    for item in terminal_items[1:]
+                    if (item[1][2][0], item[1][2][-1]) in preserved_endpoint_pairs
+                )
             kept.sort(key=lambda item: (-item[0], station_meta.get(item[1][2][-1], {}).get("name", "")))
             kept = kept[:MAX_DIRECTIONS_PER_ROUTE]
         else:
@@ -1546,6 +1560,10 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
     directions, used_stations, direction_pattern_keys = choose_patterns(
         routes, all_station_meta, segment_stats, pattern_counts, pattern_headsigns, pattern_peak_departures
     )
+    if hasattr(SOURCE_ADAPTER, "augment_scheduled_directions"):
+        SOURCE_ADAPTER.augment_scheduled_directions(
+            ROOT, CITY_CONFIG, routes, directions, used_stations, all_station_meta
+        )
 
     stations = {station_id: all_station_meta[station_id] for station_id in sorted(used_stations)}
     build_station_services(stations, routes, directions)

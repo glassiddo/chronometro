@@ -29,6 +29,8 @@ def main():
     names={s["name"]:sid for sid,s in data["stations"].items()}
     for pair in [("Longwood","Longwood Medical Area"),("Chestnut Hill","Chestnut Hill Avenue")]: require(all(n in names for n in pair) and names[pair[0]]!=names[pair[1]],f"collapsed {pair}")
     cross={(a,b,sec) for a,dests in data.get("transfers",{}).items() for b,sec in dests.items() if a!=b}; require(cross=={("place-pktrm","place-dwnxg",300),("place-dwnxg","place-pktrm",300)},f"walks {cross}")
-    dates=json.loads((DAILY/"index.json").read_text(encoding="utf-8"))["dates"]; require(dates[0]=="2026-08-30" and dates[-1]=="2026-09-29" and len(dates)==31,"daily bounds"); require(not list(DAILY.glob("2026-09-3*.json")) and not list(DAILY.glob("2026-1*.json")),"puzzle after development slice")
-    print("Boston verification passed: 8 services, 124 stations, connected, 31-day development slice")
+    dates=json.loads((DAILY/"index.json").read_text(encoding="utf-8"))["dates"]
+    require(dates[0]=="2026-08-30" and dates[-1]=="2026-10-31" and len(dates)==63,"daily bounds")
+    require({p.stem for p in DAILY.glob("????-??-??.json")}==set(dates),"daily files differ from calendar")
+    print("Boston verification passed: 8 services, 124 stations, connected, 63 days through October 31")
 if __name__=="__main__": main()
