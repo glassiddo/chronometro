@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Send private feedback about Chronométro." />
+    <title>Report a problem | Chronométro</title>
+    <link rel="icon" href="./favicon.svg?v=20260818" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css?v=20260904-simple-form" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div class="shell info-shell">
+      <header class="masthead info-masthead"><div><p class="kicker">Daily route puzzle</p><a class="brand-link" data-game-link href="./index.html">Chronométro</a></div></header>
+      <main class="info-main" id="main-content">
+        <p class="back-row"><a data-game-link href="./index.html">← Back to game</a></p>
+        <header><h1>Report a problem</h1></header>
+        <section class="info-card">
+          <p>Something wrong with a route, timing, or the game? Tell me what happened.</p>
+          <form name="feedback" method="POST" action="./feedback-thanks.html" data-netlify="true" netlify-honeypot="bot-field" id="feedbackForm" class="feedback-form">
+            <input type="hidden" name="form-name" value="feedback" />
+            <p hidden><label>Leave this empty <input name="bot-field" tabindex="-1" autocomplete="off" /></label></p>
+            <p><label for="feedbackName">Name <span class="muted">(optional)</span></label><input id="feedbackName" name="name" autocomplete="name" maxlength="100" /></p>
+            <p><label for="feedbackMessage">Message</label><textarea id="feedbackMessage" name="message" rows="6" required maxlength="5000" placeholder="What happened, and what did you expect?"></textarea></p>
+            <p class="muted">Your message and optional name are sent privately through Netlify to the site owner. They are not posted publicly.</p>
+            <button type="submit">Send message</button>
+            <p id="feedbackStatus" role="status" aria-live="polite"></p>
+          </form>
+          <p class="feedback-alternative">You can also <a href="https://github.com/glassiddo/chronometro/issues">open an issue on GitHub</a>.</p>
+        </section>
+      </main>
+      <footer class="site-footer"><nav aria-label="Project information"><a href="./faq.html">FAQ</a><a href="./rules.html">Rules</a><a href="./legal.html">About</a></nav><p>Chronométro is independent and is not endorsed by the transport operators or data providers represented in the game.</p></footer>
+    </div>
+    <script src="./info.js?v=20260903-six-cities"></script>
+    <script src="./feedback.js?v=20260904-simple-form"></script>
+  </body>
+</html>

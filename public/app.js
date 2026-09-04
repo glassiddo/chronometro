@@ -2039,69 +2039,29 @@ function configureCityMap() {
 }
 
 function fitCityMapToPuzzle() {
-  if (CITY_ID === "boston") {
-    const puzzle = currentPuzzle();
-    const points = [station(puzzle.start), station(puzzle.end), station(state.currentStation)]
-      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
-    const lats = points.map((point) => point.lat);
-    const lons = points.map((point) => point.lon);
-    const bounds = CITY_MAP.bounds;
-    const aspect = (bounds.maxLon - bounds.minLon) / (bounds.maxLat - bounds.minLat);
-    const latSpan = Math.min(bounds.maxLat - bounds.minLat, Math.max(
-      .16, (Math.max(...lats) - Math.min(...lats)) * 1.5,
-      (Math.max(...lons) - Math.min(...lons)) * 1.5 / aspect,
-    ));
-    const lonSpan = latSpan * aspect;
-    const minLat = Math.max(bounds.minLat, Math.min(bounds.maxLat - latSpan,
-      (Math.min(...lats) + Math.max(...lats) - latSpan) / 2));
-    const minLon = Math.max(bounds.minLon, Math.min(bounds.maxLon - lonSpan,
-      (Math.min(...lons) + Math.max(...lons) - lonSpan) / 2));
-    CITY_MAP.viewBounds = { minLat, maxLat: minLat + latSpan, minLon, maxLon: minLon + lonSpan };
-    return;
-  }
-  if (["paris", "chicago", "washington-dc", "boston", "berlin"].includes(CITY_ID)) {
-    CITY_MAP.viewBounds = CITY_MAP.bounds;
-    return;
-  }
   const puzzle = currentPuzzle();
-  const start = station(puzzle.start);
-  const end = station(puzzle.end);
-  const points = [start, end];
-  const lats = points.map((point) => point.lat).filter(Number.isFinite);
-  const lons = points.map((point) => point.lon).filter(Number.isFinite);
-  if (!lats.length || !lons.length) {
+  const points = [station(puzzle.start), station(puzzle.end), station(state.currentStation)]
+    .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
+  if (!points.length) {
     CITY_MAP.viewBounds = CITY_MAP.bounds;
     return;
   }
-  const centralBounds = CITY_ID === "chicago"
-    ? { minLat: 41.84, maxLat: 41.93, minLon: -87.72, maxLon: -87.54 }
-    : { minLat: 51.47, maxLat: 51.56, minLon: -0.25, maxLon: 0.12 };
-  const inside = (point, bounds) =>
-    point.lat >= bounds.minLat && point.lat <= bounds.maxLat && point.lon >= bounds.minLon && point.lon <= bounds.maxLon;
-  if (inside(start, centralBounds) && inside(end, centralBounds)) {
-    CITY_MAP.viewBounds = centralBounds;
-    return;
-  }
-  const rawLatSpan = Math.max(...lats) - Math.min(...lats);
-  const rawLonSpan = Math.max(...lons) - Math.min(...lons);
-  if (rawLatSpan > (CITY_ID === "chicago" ? 0.18 : 0.13) || rawLonSpan > 0.3) {
-    CITY_MAP.viewBounds = CITY_MAP.bounds;
-    return;
-  }
+  const lats = points.map((point) => point.lat);
+  const lons = points.map((point) => point.lon);
+  const bounds = CITY_MAP.bounds;
+  // Preserve the basemap's proportions while fitting the actual journey.
+  // A small minimum span keeps nearby stations readable without losing context.
+  const aspect = (bounds.maxLon - bounds.minLon) / (bounds.maxLat - bounds.minLat);
+  const latSpan = Math.max(0.025,
+    (Math.max(...lats) - Math.min(...lats)) * 1.55,
+    (Math.max(...lons) - Math.min(...lons)) * 1.55 / aspect);
+  const lonSpan = latSpan * aspect;
   const latMid = (Math.min(...lats) + Math.max(...lats)) / 2;
   const lonMid = (Math.min(...lons) + Math.max(...lons)) / 2;
-  const latSpan = Math.max(0.09, rawLatSpan * 1.8);
-  const lonSpan = Math.max(0.18, rawLonSpan * 1.8);
-  const clampRange = (mid, span, minimum, maximum) => {
-    let low = mid - span / 2;
-    let high = mid + span / 2;
-    if (low < minimum) { high += minimum - low; low = minimum; }
-    if (high > maximum) { low -= high - maximum; high = maximum; }
-    return [Math.max(minimum, low), Math.min(maximum, high)];
+  CITY_MAP.viewBounds = {
+    minLat: latMid - latSpan / 2, maxLat: latMid + latSpan / 2,
+    minLon: lonMid - lonSpan / 2, maxLon: lonMid + lonSpan / 2,
   };
-  const [minLat, maxLat] = clampRange(latMid, latSpan, CITY_MAP.bounds.minLat, CITY_MAP.bounds.maxLat);
-  const [minLon, maxLon] = clampRange(lonMid, lonSpan, CITY_MAP.bounds.minLon, CITY_MAP.bounds.maxLon);
-  CITY_MAP.viewBounds = { minLat, maxLat, minLon, maxLon };
 }
 
 function mapPoint({ lat, lon }, clamp = true) {
@@ -3224,7 +3184,6 @@ function updateCityChrome() {
   const city = state.data.metadata.city;
   $("#citySelector").value = CITY_ID;
   $("#cityKicker").textContent = CITY_ID === "berlin" ? "Berlin U-Bahn + S-Bahn · Daily route puzzle" : "Daily route puzzle";
-  $("#cityDisclaimer").textContent = city.attribution.disclaimer;
   document.title = `Chronométro — ${city.name}`;
   document.documentElement.dataset.city = CITY_ID;
   document.querySelectorAll(".site-footer nav a").forEach((link) => {
