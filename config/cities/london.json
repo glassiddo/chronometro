@@ -54,7 +54,7 @@
     "minimumEndpointDistanceMetres": 2000,
     "endpointModes": ["tube", "dlr"],
     "boundedEndpointModes": ["elizabeth"],
-    "bounds": {"minLat": 51.35, "maxLat": 51.65, "minLon": -0.52, "maxLon": 0.25},
+    "boundaryFile": "config/london-city-boundary.geojson",
     "excludeSameComplexEndpoints": true,
     "requireInterchangeEndpoints": false,
     "seedNamespace": "chronometro-london-dlr-v1"

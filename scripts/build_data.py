@@ -24,6 +24,7 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from statistics import median
+from puzzle_boundaries import covers_station
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1549,6 +1550,9 @@ def build_route_continuations(directions: dict[str, dict]) -> list[dict]:
 
 
 def is_within_puzzle_bounds(station: dict) -> bool:
+    boundary = CITY_CONFIG["puzzles"].get("boundaryFile")
+    if boundary:
+        return covers_station(ROOT / boundary, station)
     if hasattr(SOURCE_ADAPTER, "is_within_puzzle_boundary"):
         return SOURCE_ADAPTER.is_within_puzzle_boundary(station)
     lat = station.get("lat")
@@ -2110,6 +2114,16 @@ def optimize_daily_endpoint_hubs(selected: list[dict]) -> list[dict]:
         if best is not None:
             pair["optimalRoute"] = best
             pair["transferCount"] = best["transferCount"]
+            distance = optimal_route_distance_m(best, network["directions"], network["stations"])
+            edge_count = optimal_route_edge_count(best, network["directions"])
+            endpoint_distance = station_distance_m(network["stations"][pair["start"]], network["stations"][pair["end"]])
+            shared_lines = bool(station_public_lines(network["stations"][pair["start"]], network["routes"])
+                                & station_public_lines(network["stations"][pair["end"]], network["routes"]))
+            pair["routeDistanceM"] = round(distance) if distance is not None else None
+            pair["transitEdgeCount"] = edge_count
+            pair["unplayableReasons"] = playable_reasons(
+                (best["totalSec"], []), best, endpoint_distance, distance, edge_count, shared_lines)
+            pair["playable"] = not pair["unplayableReasons"]
         optimized.append(pair)
     return optimized
 
@@ -2122,8 +2136,15 @@ def write_daily_range(pairs: list[dict], start_date: str, days: int, count: int)
         day = start + timedelta(days=offset)
         dates.append(day.isoformat())
         seed_namespace = CITY_CONFIG["puzzles"]["seedNamespace"]
-        selected = select_varied_playable(pairs, count, f"{seed_namespace}-daily:{day.isoformat()}")
-        selected = optimize_daily_endpoint_hubs(selected)
+        day_pairs = pairs
+        while True:
+            selected = select_varied_playable(day_pairs, count, f"{seed_namespace}-daily:{day.isoformat()}")
+            selected = optimize_daily_endpoint_hubs(selected)
+            rejected = {pair["id"] for pair in selected if not pair["playable"]}
+            if not rejected:
+                break
+            log(f"{day}: replacing {len(rejected)} candidates failing post-hub puzzle rules")
+            day_pairs = [pair for pair in day_pairs if pair["id"] not in rejected]
         data = {"metadata": daily_metadata(day, len(selected)), "puzzles": selected}
         write_json(DAILY_DIR / f"{day.isoformat()}.json", data)
     index = {
@@ -2147,6 +2168,19 @@ def load_all_pairs() -> tuple[list[dict], Counter] | None:
         return None
     data = json.loads(ALL_PAIRS_OUT.read_text(encoding="utf-8"))
     pairs = data.get("puzzles", [])
+    # Cached routing remains valid when geography changes, but endpoint eligibility
+    # does not. Never allow an old bounding-box pool to bypass the current rule.
+    network = json.loads(NETWORK_OUT.read_text(encoding="utf-8"))
+    stations = network["stations"]
+    eligible = {sid for sid, station in stations.items()
+                if station.get("services") and is_puzzle_endpoint(station)}
+    cached_endpoints = {pair[key] for pair in pairs for key in ("start", "end")}
+    if eligible - cached_endpoints:
+        log("candidate cache is missing eligible endpoints; rebuilding")
+        return None
+    before = len(pairs)
+    pairs = [pair for pair in pairs if pair["start"] in eligible and pair["end"] in eligible]
+    log(f"current endpoint rules retain {len(pairs):,} of {before:,} cached pairs")
     reason_counts: Counter[str] = Counter()
     for pair in pairs:
         reason_counts.update(pair.get("unplayableReasons", []))

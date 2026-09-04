@@ -17,7 +17,9 @@ const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
-const DATA_REVISION = CITY_ID === "berlin" ? "20260903-berlin-sbahn" : "20260903-six-cities";
+const DATA_REVISION = ["paris", "london"].includes(CITY_ID)
+  ? "20260904-city-boundaries"
+  : CITY_ID === "berlin" ? "20260903-berlin-sbahn" : "20260903-six-cities";
 const BOSTON_BASEMAP_URL = "./data/boston/coastline.svg?v=20260903";
 
 const state = {

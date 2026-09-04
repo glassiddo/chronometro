@@ -197,6 +197,12 @@ To refresh Berlin, download and extract VBB's official GTFS package into the ign
 
 ## Timing limitations
 
+Puzzle endpoints use the actual Paris municipal boundary for RER-only stations,
+Greater London for Elizabeth-line-only stations, and Berlin's state boundary for
+S-Bahn-only stations. Included Métro, Underground, DLR, and U-Bahn stations are
+not geographically restricted. Routes may travel outside the endpoint boundaries.
+See [boundary sources, audit, and regeneration](docs/puzzle-boundaries.md).
+
 The model estimates a representative journey rather than predicting a particular departure. It does not include entering the first station or reaching the initial platform. Some branch-specific wait variation, route-pair-specific interchange times, and service-pattern differences remain simplified. Chicago does not vary by time of day, day of week, construction reroutes, or Purple Express operating hours. November and December puzzles continue to use the fixed representative snapshot even though its source calendar expires on 31 October 2026.
 
 Berlin restores U6 north and northbound Wollankstraße from the archive. S-Bahn ride times use morning departure-to-departure intervals, including dwell at the destination; U-Bahn retains its existing arrival-minus-departure convention. Frequencies represent regular morning service, with alternative S85 termini available at their own regular frequency without double counting their common section. This is a fixed normal-network puzzle model, not a timetable for a particular departure.

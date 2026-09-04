@@ -83,7 +83,7 @@
     "minimumEndpointDistanceMetres": 1500,
     "endpointModes": ["metro"],
     "boundedEndpointModes": ["rer"],
-    "bounds": {"minLat": 48.815, "maxLat": 48.902, "minLon": 2.25, "maxLon": 2.42},
+    "boundaryFile": "config/paris-city-boundary.geojson",
     "seedNamespace": "metro-express"
   },
   "paths": {
