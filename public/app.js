@@ -33,9 +33,66 @@ const state = {
   stage: "line",
   selected: {},
   results: [],
+  undoHistory: [],
+  changesOnly: true,
 };
 
 const $ = (selector) => document.querySelector(selector);
+
+const SAVED_FIELDS = ["puzzleIndex", "currentStation", "steps", "totalSec", "stage", "selected", "results", "undoHistory", "changesOnly"];
+
+function progressKey() {
+  return `chronometro:progress:${CITY_ID}:${state.dailyDate}:${state.dailyKind}`;
+}
+
+function progressSignature() {
+  return `${DATA_REVISION}:${hashString(JSON.stringify(state.daily))}`;
+}
+
+function saveProgress() {
+  if (!state.daily.length) return;
+  try {
+    const progress = Object.fromEntries(SAVED_FIELDS.map((field) => [field, state[field]]));
+    localStorage.setItem(progressKey(), JSON.stringify({ version: 1, signature: progressSignature(), progress }));
+  } catch {
+    // Storage may be disabled or full; the game remains playable.
+  }
+}
+
+function restoreProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(progressKey()));
+    if (saved?.version !== 1 || saved.signature !== progressSignature()) return false;
+    const p = saved.progress;
+    if (!p || !Number.isInteger(p.puzzleIndex) || p.puzzleIndex < 0 || p.puzzleIndex >= puzzleCount()
+      || !state.data.stations[p.currentStation] || !Number.isFinite(p.totalSec) || p.totalSec < 0
+      || !Array.isArray(p.steps) || !Array.isArray(p.results) || !Array.isArray(p.undoHistory)
+      || !["line", "direction", "alight", "result", "gave-up", "summary"].includes(p.stage)
+      || !p.selected || typeof p.changesOnly !== "boolean") return false;
+    if (p.steps.some((step) => !state.data.stations[step.from] || !state.data.stations[step.to]
+      || !Number.isFinite(step.elapsedSec) || (step.type !== "walk" && !direction(step.directionId)))) return false;
+    if (p.undoHistory.some((move) => !Number.isInteger(move.stepCount) || move.stepCount < 0
+      || move.stepCount > p.steps.length || !state.data.stations[move.currentStation] || !Number.isFinite(move.totalSec))) return false;
+    if (["direction", "alight"].includes(p.stage) && (!route(p.selected.routeId) || !Array.isArray(p.selected.boards))) return false;
+    if (p.stage === "alight" && !direction(p.selected.directionId)) return false;
+    const completedCount = ["result", "gave-up", "summary"].includes(p.stage) ? p.puzzleIndex + 1 : p.puzzleIndex;
+    if (p.results.length < completedCount || p.results.slice(0, completedCount).some((result) => !result || !Number.isFinite(result.score))) return false;
+    SAVED_FIELDS.forEach((field) => { state[field] = p[field]; });
+    setRoundLabel();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function renderSavedProgress() {
+  if (state.stage === "summary") renderSummary();
+  else if (state.stage === "result") renderResult();
+  else if (state.stage === "gave-up") giveUp();
+  else if (state.stage === "direction") renderDirectionStep();
+  else if (state.stage === "alight") renderAlightStep();
+  else renderLineStep();
+}
 
 function station(id) {
   return state.data.stations[id] || { id, name: id };
@@ -235,7 +292,9 @@ function escapeHtml(value) {
 }
 
 function setRoundLabel() {
-  $("#todayLabel").textContent = state.dailyDate || cityDateString();
+  const date = state.dailyDate || cityDateString();
+  const example = state.dailyKind.includes("example");
+  $("#todayLabel").textContent = example ? "Practice puzzles" : date === cityDateString() ? date : `${date} · Archive`;
   $("#roundLabel").textContent =
     state.stage === "summary" ? "Done" : `${state.puzzleIndex + 1} / ${puzzleCount()}`;
 }
@@ -2187,6 +2246,7 @@ function toolbarMarkup({ backId = "", backLabel = "" } = {}) {
   return `
     <div class="toolbar">
       ${backId ? `<button class="action secondary" id="${backId}">${escapeHtml(backLabel)}</button>` : ""}
+      ${!backId && state.undoHistory.length ? `<button class="action secondary" id="undoLeg" aria-label="Undo last leg">Undo</button>` : ""}
       <button class="action secondary" id="resetRoute">Reset route</button>
       <button class="action secondary" id="giveUp">Give up</button>
     </div>
@@ -2194,6 +2254,14 @@ function toolbarMarkup({ backId = "", backLabel = "" } = {}) {
 }
 
 function bindPuzzleToolbar() {
+  $("#undoLeg")?.addEventListener("click", () => {
+    const previous = state.undoHistory.pop();
+    state.steps = state.steps.slice(0, previous.stepCount);
+    state.totalSec = previous.totalSec;
+    state.currentStation = previous.currentStation;
+    state.selected = {};
+    renderLineStep();
+  });
   $("#resetRoute").addEventListener("click", startPuzzle);
   $("#giveUp").addEventListener("click", giveUp);
 }
@@ -2230,6 +2298,19 @@ function boardShell(content, { showRouteSummary = true } = {}) {
       <section class="workspace">${content}</section>
     </div>
   `;
+  focusGameHeading();
+  saveProgress();
+}
+
+function focusGameHeading() {
+  const heading = $("#game h2");
+  if (!heading) return;
+  heading.tabIndex = -1;
+  heading.focus({ preventScroll: true });
+}
+
+function rememberMove() {
+  state.undoHistory.push({ stepCount: state.steps.length, totalSec: state.totalSec, currentStation: state.currentStation });
 }
 
 function transferFallback(fromMode, toMode) {
@@ -2630,6 +2711,10 @@ function renderAlightStep() {
       <h2>Choose your stop</h2>
       <span>${escapeHtml(routeDisplayName(r))} · ${escapeHtml(selected.directionLabel || directionGroupLabel(dir.label))}</span>
     </div>
+    <div class="stop-list-controls">
+      <label><input type="checkbox" id="changesOnly" ${state.changesOnly ? "checked" : ""}> Changes only</label>
+      <span>Ride times</span>
+    </div>
     <div class="stop-strip" aria-label="${escapeHtml(routeDisplayName(r))} ${escapeHtml(selected.directionLabel || directionGroupLabel(dir.label))}">
       ${choices
         .map(
@@ -2648,6 +2733,31 @@ function renderAlightStep() {
     ${toolbarMarkup({ backId: "backToDirections", backLabel: "Back" })}
     </div>
   `);
+  const updateStopFilter = () => {
+    let visibleCount = 0;
+    document.querySelectorAll("[data-alight]").forEach((button) => {
+      const id = button.dataset.alight;
+      const hasChange = [...stationLineIds(id), ...stationInterchangeRouteIds(id)].some((routeId) => routeId !== selected.routeId)
+        || Object.keys(state.data.transfers?.[id] || {}).some((to) => to !== id);
+      button.hidden = state.changesOnly && !hasChange && !samePuzzleStation(id, currentPuzzle().end);
+      if (!button.hidden) visibleCount += 1;
+    });
+    let empty = $("#noChangeStops");
+    if (!empty) {
+      empty = document.createElement("p");
+      empty.id = "noChangeStops";
+      empty.className = "muted";
+      empty.textContent = "No changes or destination in this direction. Turn off Changes only to see all stops.";
+      $(".stop-strip").append(empty);
+    }
+    empty.hidden = visibleCount > 0;
+  };
+  $("#changesOnly").addEventListener("change", (event) => {
+    state.changesOnly = event.target.checked;
+    updateStopFilter();
+    saveProgress();
+  });
+  updateStopFilter();
   document.querySelectorAll("[data-alight]").forEach((button) => {
     button.addEventListener("click", () => {
       state.selected.directionId = button.dataset.directionId;
@@ -2767,6 +2877,7 @@ function addWalkStep(toStation, nextRouteId = null, { renderAfter = true } = {})
     transferSec,
     elapsedSec: transferSec,
   };
+  if (renderAfter) rememberMove();
   state.steps.push(step);
   state.totalSec += transferSec;
   state.currentStation = toStation;
@@ -2799,9 +2910,13 @@ function addLeg(toStation) {
     return;
   }
 
+  rememberMove();
   if (selected.boardStation !== state.currentStation && !isFreeStartHubBoarding(selected.boardStation)) {
     const walked = addWalkStep(selected.boardStation, selected.routeId, { renderAfter: false });
-    if (!walked) return;
+    if (!walked) {
+      state.undoHistory.pop();
+      return;
+    }
   }
 
   const leg = {
@@ -2947,6 +3062,7 @@ function precomputedSteps(routeInfo) {
 }
 
 function renderResult() {
+  state.stage = "result";
   const puzzle = currentPuzzle();
   const scored = scoreRoute(puzzle, state.totalSec);
   const optimal = puzzle.optimalRoute;
@@ -2979,6 +3095,7 @@ function renderResult() {
 }
 
 function giveUp() {
+  state.stage = "gave-up";
   const puzzle = currentPuzzle();
   const optimal = puzzle.optimalRoute;
   const optimalSteps = precomputedSteps(optimal);
@@ -3021,7 +3138,8 @@ function shareScores() {
 }
 
 function shareText(total) {
-  return `chronometro.cc ${state.dailyDate || cityDateString()}\n${total}/${puzzleCount() * 100}\nScores: ${shareScores()}`;
+  const puzzleLabel = state.dailyKind.includes("example") ? "Practice" : state.dailyDate || cityDateString();
+  return `chronometro.cc · ${state.data.metadata.city.name} · ${puzzleLabel}\n${total}/${puzzleCount() * 100}\nScores: ${shareScores()}`;
 }
 
 async function copyText(text) {
@@ -3074,6 +3192,8 @@ function renderSummary() {
   $("#restartDay").addEventListener("click", () => {
     restartDay();
   });
+  focusGameHeading();
+  saveProgress();
 }
 
 function restartDay() {
@@ -3086,6 +3206,7 @@ function startPuzzle() {
   state.stage = "line";
   state.currentStation = currentPuzzle().start;
   state.steps = [];
+  state.undoHistory = [];
   state.totalSec = 0;
   state.selected = {};
   setRoundLabel();
@@ -3224,7 +3345,8 @@ async function init() {
   state.daily = puzzleSet.puzzles;
   state.dailyDate = puzzleSet.date;
   state.dailyKind = puzzleSet.kind;
-  startPuzzle();
+  if (restoreProgress()) renderSavedProgress();
+  else startPuzzle();
 }
 
 init().catch(() => {
