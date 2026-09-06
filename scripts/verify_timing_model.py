@@ -159,13 +159,18 @@ def verify_optimal_breakdowns(data: dict) -> None:
         optimal = puzzle["optimalRoute"]
         steps = optimal.get("steps")
         require(steps, f"{puzzle['id']} missing optimalRoute.steps")
-        public_lines = [
-            (step.get("mode"), step.get("line"))
-            for step in optimal.get("legs", [])
-            if step.get("type", "ride") == "ride"
-        ]
+        ride_legs = [step for step in optimal.get("legs", []) if step.get("type", "ride") == "ride"]
+        public_lines = [(step.get("mode"), step.get("line")) for step in ride_legs]
+        allowed_change_ids = set(CITY_CONFIG["network"].get("mandatorySameLineChangeStationIds", []))
+        invalid_repeat = any(
+            public_lines[index] in public_lines[:index]
+            and not (index > 0 and ride_legs[index - 1].get("line") == ride_legs[index].get("line")
+                     and ride_legs[index - 1].get("to") == ride_legs[index].get("from")
+                     and ride_legs[index].get("from") in allowed_change_ids)
+            for index in range(len(public_lines))
+        )
         require(
-            len(public_lines) == len(set(public_lines)),
+            not invalid_repeat,
             f"{puzzle['id']} repeats a public line in optimal route: {public_lines}",
         )
         route_total = optimal["rideSec"] + optimal["waitSec"] + optimal["transferSec"]

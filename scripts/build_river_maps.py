@@ -22,12 +22,13 @@ REGIONS = {
     'washington-dc': ((38.64, -77.66, 39.25, -76.68), 'Potomac|Anacostia'),
     'boston': ((42.10, -71.44, 42.56, -70.68), 'Charles River|Mystic River|Neponset River|Chelsea Creek'),
     'berlin': ((52.29, 12.93, 52.78, 13.80), 'Spree|Havel|Landwehrkanal'),
+    'madrid': ((40.27, -3.98, 40.57, -3.45), 'Manzanares|Jarama'),
 }
 
 
-def query():
+def query(regions=REGIONS):
     ways = ''.join(f'way["waterway"~"^(river|canal|stream|tidal_channel)$"]["name"~"{names}"]({",".join(map(str, bounds))});relation["type"="waterway"]["name"~"{names}"]({",".join(map(str, bounds))});'
-                   for bounds, names in REGIONS.values())
+                   for bounds, names in regions.values())
     return '[out:json][timeout:90];(' + ways + ');(._;way(r););out geom;'
 
 
@@ -52,12 +53,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path)
     parser.add_argument('--save-source', type=Path)
+    parser.add_argument('--city', choices=sorted(REGIONS))
     args = parser.parse_args()
     if args.source:
         source = json.loads(args.source.read_text(encoding='utf-8'))
     else:
         request = urllib.request.Request('https://overpass-api.de/api/interpreter',
-            data=urllib.parse.urlencode({'data': query()}).encode(),
+            data=urllib.parse.urlencode({'data': query({args.city: REGIONS[args.city]} if args.city else REGIONS)}).encode(),
             headers={'User-Agent': 'Chronometro map geometry build'})
         with urllib.request.urlopen(request, timeout=120) as response:
             source = json.load(response)
@@ -73,6 +75,8 @@ def main():
                 if member['type'] == 'way' and member.get('role', '') in ('', 'main_stream', 'side_stream'):
                     member_names[member['ref']] = element.get('tags', {}).get('name', '')
     for city, (bounds, names) in REGIONS.items():
+        if args.city and city != args.city:
+            continue
         if not (root / 'config/cities' / f'{city}.json').exists():
             continue
         south, west, north, east = bounds

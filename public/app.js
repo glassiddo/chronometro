@@ -1,4 +1,4 @@
-const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc", "boston", "berlin"]);
+const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc", "boston", "berlin", "madrid"]);
 const requestedCityId = new URLSearchParams(window.location.search).get("city");
 const CITY_ID = SUPPORTED_CITY_IDS.has(requestedCityId) ? requestedCityId : "paris";
 const CITY_TIMEZONES = {
@@ -8,6 +8,7 @@ const CITY_TIMEZONES = {
   "washington-dc": "America/New_York",
   boston: "America/New_York",
   berlin: "Europe/Berlin",
+  madrid: "Europe/Madrid",
 };
 const CITY_DATA_URL = `./data/${CITY_ID}`;
 const NETWORK_URL = `${CITY_DATA_URL}/network.json`;
@@ -20,7 +21,7 @@ const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
 const DATA_REVISION = CITY_ID === "paris"
   ? "20260906-paris-rer-pooling"
   : CITY_ID === "london" ? "20260904-city-boundaries"
-  : CITY_ID === "berlin" ? "20260903-berlin-sbahn" : "20260903-six-cities";
+  : CITY_ID === "berlin" ? "20260903-berlin-sbahn" : CITY_ID === "madrid" ? "20260906-madrid" : "20260903-six-cities";
 const BOSTON_BASEMAP_URL = "./data/boston/coastline.svg?v=20260903";
 
 const state = {
@@ -2077,6 +2078,7 @@ function configureCityMap() {
   const isWashington = CITY_ID === "washington-dc";
   const isBoston = CITY_ID === "boston";
   const isBerlin = CITY_ID === "berlin";
+  const isMadrid = CITY_ID === "madrid";
   CITY_MAP = {
     width: 320,
     height: 220,
@@ -2088,7 +2090,9 @@ function configureCityMap() {
         ? { minLat: 38.76, maxLat: 39.13, minLon: -77.50, maxLon: -76.83 }
         : isBerlin
           ? { minLat: 52.28, maxLat: 52.78, minLon: 12.98, maxLon: 13.96 }
-      : { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
+        : isMadrid
+          ? { minLat: 40.27, maxLat: 40.57, minLon: -3.98, maxLon: -3.45 }
+       : { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
     outline: [],
     parks: [],
     airport: null,
@@ -2400,6 +2404,15 @@ function lastRideStep() {
   return null;
 }
 
+function isMandatoryMadridSameLineChange(stationId, routeId) {
+  if (CITY_ID !== "madrid") return false;
+  return {
+    est_4_182: "4__9___",
+    est_4_274: "4__10___",
+    est_4_286: "4__7___",
+  }[stationId] === routeId;
+}
+
 function explicitWalkSeconds(fromStation, toStation, nextRouteId = null) {
   if (fromStation === toStation) return 0;
   const previous = lastRideStep();
@@ -2547,7 +2560,7 @@ function renderLineStep(message = "") {
   state.stage = "line";
   const options = boardingOptions();
   const walks = walkOptions();
-  const compactRouteChoices = ["chicago", "washington-dc", "boston", "berlin"].includes(CITY_ID);
+  const compactRouteChoices = ["chicago", "washington-dc", "boston", "berlin", "madrid"].includes(CITY_ID);
   boardShell(`
     <div class="step-title">
       <h2>Choose your next move</h2>
@@ -2561,9 +2574,13 @@ function renderLineStep(message = "") {
               ${options
                 .map((option, index) => {
                   const r = route(option.routeId);
+                  const sameLineChange = CITY_ID === "madrid"
+                    && ["est_4_182", "est_4_274", "est_4_286"].includes(state.currentStation)
+                    && lastRideStep()?.routeId === option.routeId;
                   return `
-                    <button class="choice line-choice" data-line-index="${index}"${compactRouteChoices ? ` aria-label="Board ${escapeHtml(routeDisplayName(r))}"` : ""}>
+                    <button class="choice line-choice" data-line-index="${index}"${compactRouteChoices ? ` aria-label="${sameLineChange ? "Change trains · Line" : "Board"} ${escapeHtml(routeDisplayName(r))}"` : ""}>
                       ${lineChoiceMarker(option.routeId)}
+                      ${sameLineChange ? `<span><strong>Change trains · Line ${escapeHtml(routeDisplayName(r))}</strong></span>` : ""}
                       ${compactRouteChoices ? "" : `<span>
                         <strong>${escapeHtml(routeChoiceLabel(r))}</strong>
                       </span>`}
@@ -2762,7 +2779,8 @@ function renderAlightStep() {
     document.querySelectorAll("[data-alight]").forEach((button) => {
       const id = button.dataset.alight;
       const hasChange = [...stationLineIds(id), ...stationInterchangeRouteIds(id)].some((routeId) => routeId !== selected.routeId)
-        || Object.keys(state.data.transfers?.[id] || {}).some((to) => to !== id);
+        || Object.keys(state.data.transfers?.[id] || {}).some((to) => to !== id)
+        || isMandatoryMadridSameLineChange(id, selected.routeId);
       button.hidden = state.changesOnly && !hasChange && !samePuzzleStation(id, currentPuzzle().end);
       if (!button.hidden) visibleCount += 1;
     });

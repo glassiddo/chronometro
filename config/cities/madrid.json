@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "madrid",
+  "name": "Madrid",
+  "gameTitle": "Chronométro",
+  "networkTitle": "Madrid Metro network",
+  "timezone": "Europe/Madrid",
+  "locale": "es-ES",
+  "source": {
+    "type": "gtfs",
+    "directory": "gouv_madrid_crtm_gtfs-export",
+    "adapter": "madrid",
+    "publisher": "Consorcio Regional de Transportes de Madrid (CRTM)",
+    "feedUrl": "https://crtm.maps.arcgis.com/sharing/rest/content/items/5c7f2951962540d69ffe8f640d94c246/data",
+    "downloadDate": "2026-09-06",
+    "fallbackVersion": "CRTM-20250527",
+    "fallbackValidFrom": "2025-05-27",
+    "fallbackValidTo": "2026-05-27"
+  },
+  "attribution": {
+    "display": "Powered by CRTM · Consorcio Regional de Transportes de Madrid",
+    "disclaimer": "Static data provided by CRTM under its open-data licence. Chronométro is independently made and is not affiliated with or endorsed by CRTM or Metro de Madrid. Documented normal-network snapshot; no live arrivals or disruptions."
+  },
+  "modes": {"metro": {"label": "Metro", "defaultWaitSeconds": 210, "maximumWaitSeconds": 600}},
+  "timing": {
+    "peakStartSeconds": 25200, "peakEndSeconds": 36000, "minimumWaitSeconds": 30,
+    "transferDefaultsSeconds": {"same_mode": 180, "fallback": 180},
+    "stationEquivalenceDistanceMetres": 0, "stationEquivalenceTransferSeconds": 0
+  },
+  "network": {
+    "maximumDirectionsPerRoute": 8,
+    "shortTurnModes": [],
+    "sharedServiceGroups": [],
+    "combinePatternsWithinRoutes": [],
+    "routeContinuations": [],
+    "mandatorySameLineChangeStationIds": ["est_4_182", "est_4_274", "est_4_286"],
+    "walkingTransfers": {"allowAll": true},
+    "exactRideRouting": true
+  },
+  "puzzles": {
+    "startDate": "2026-09-06", "days": 117, "dailyCount": 5, "exampleCount": 100,
+    "minimumRouteDistanceMetres": 2000, "minimumEndpointDistanceMetres": 1500,
+    "endpointModes": ["metro"], "boundedEndpointModes": [],
+    "excludeSameComplexEndpoints": true, "requireInterchangeEndpoints": false,
+    "seedNamespace": "chronometro-madrid-metro-v1"
+  },
+  "paths": {
+    "network": "public/data/madrid/network.json",
+    "allPairs": "public/data/madrid/generated/all-pairs.json",
+    "example": "public/data/madrid/example/puzzles.json",
+    "daily": "public/data/madrid/daily"
+  }
+}

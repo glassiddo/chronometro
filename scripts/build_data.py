@@ -598,11 +598,15 @@ def build_waits(
 
     for dir_id, direction in directions.items():
         route_id = direction["routeId"]
-        departures = pattern_peak_departures.get(direction_pattern_keys[dir_id], [])
+        departures = pattern_peak_departures.get(direction_pattern_keys.get(dir_id), [])
         route_departures[route_id].extend(departures)
         wait = expected_wait_from_departures(departures, routes[route_id]["mode"])
+        if wait is None and direction.get("waitSeconds") is not None:
+            wait = clamp_wait(int(direction["waitSeconds"]), routes[route_id]["mode"])
         if wait is not None:
             wait_by_direction[dir_id] = wait
+            if direction.get("waitSeconds") is not None:
+                wait_by_route[route_id] = min(wait, wait_by_route.get(route_id, wait))
 
     for route_id, departures in route_departures.items():
         wait = expected_wait_from_departures(departures, routes[route_id]["mode"])
@@ -1848,11 +1852,17 @@ def playable_reasons(
 
 def has_repeated_public_line(optimal_route: dict) -> bool:
     seen = set()
-    for leg in optimal_route.get("legs", []):
+    legs = [leg for leg in optimal_route.get("legs", []) if leg.get("type") == "ride"]
+    allowed_ids = set(CITY_CONFIG["network"].get("mandatorySameLineChangeStationIds", []))
+    for index, leg in enumerate(legs):
         if leg.get("type") != "ride":
             continue
         key = (leg.get("mode"), leg.get("line"))
         if key in seen:
+            previous = legs[index - 1] if index else {}
+            change_id = leg.get("from") if previous.get("to") == leg.get("from") else None
+            if change_id in allowed_ids and previous.get("line") == leg.get("line"):
+                continue
             return True
         seen.add(key)
     return False

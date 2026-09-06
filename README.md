@@ -59,6 +59,15 @@ Complete scheduled `stop_times.txt` patterns preserve the terminal branches, sha
 
 The normal network combines VBB scheduled patterns with the official regular S-Bahn timetable. VBB’s 2021 archive restores U6 north and the northbound Wollankstraße stop on S1, S25, and S85. S41 runs clockwise and S42 counterclockwise, including across the stored ring seam. See [Berlin data and verification](docs/berlin-data.md).
 
+### Madrid
+
+- Metro lines 1–12 and Ramal R, including MetroSur and full outer sections
+- All included Metro station complexes are eligible endpoints, without a municipal cutoff
+- Lines 6 and 12 work in both directions across their stored ring seams
+- Required same-line changes at Estadio Metropolitano, Puerta de Arganda, and Tres Olivos charge an interchange and a fresh wait
+
+See [Madrid data and timing assumptions](docs/madrid-data.md).
+
 ## Data sources
 
 ### Paris
@@ -132,6 +141,7 @@ No city uses live service status, disruptions, closures, fares, accessibility, c
 - `public/data/washington-dc/` — Washington network, examples, and daily puzzles
 - `public/data/boston/` — Boston network, examples, and daily puzzles
 - `public/data/berlin/` — Berlin network, examples, and daily puzzles through October
+- `public/data/madrid/` — Madrid network, examples, and daily puzzles through December 2026
 - `config/cities/` — city coverage, timing assumptions, output paths, and attribution
 - `scripts/build_city.py` — city-neutral build entry point
 - `scripts/build_data.py` — shared normalization, routing, timing, and puzzle generation
@@ -153,6 +163,7 @@ python scripts/build_city.py chicago --mode release
 python scripts/build_city.py washington-dc --mode release
 python scripts/build_city.py boston --mode release
 python scripts/build_city.py berlin --mode release
+python scripts/build_city.py madrid --mode release
 ```
 
 Useful incremental build modes include `network`, `all-pairs`, `example`, and `daily-range`.
@@ -175,6 +186,9 @@ python scripts/validate_city_schema.py boston
 python scripts/verify_timing_model.py boston
 python scripts/verify_boston_network.py
 python scripts/verify_berlin_network.py
+python scripts/validate_city_schema.py madrid
+python scripts/verify_timing_model.py madrid
+python scripts/verify_madrid_network.py
 node scripts/verify_berlin_frontend.js
 python scripts/check_auteuil_route.py
 ```
