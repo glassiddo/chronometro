@@ -297,6 +297,19 @@ def verify_route_continuations(data: dict) -> None:
         data["metadata"].get("waitSecondsByRoute", {}),
         data.get("canonicalStationIds", {}),
     )
+    rer_c_shared_waits = {
+        router.combined_wait_seconds(direction_id, "15324", "ITOAUTO79042", "PARIS167848")
+        for direction_id in ["15324:0", "15324:1", "15324:2", "15324:3", "15324:4", "15324:5"]
+    }
+    require(
+        rer_c_shared_waits == {67},
+        f"Pont de l'Alma -> Invalides RER C patterns should share a 67s wait, got {rer_c_shared_waits}",
+    )
+    massy = data["directions"]["15324:1"]["stations"][-1]
+    require(
+        router.combined_wait_seconds("15324:1", "15324", "ITOAUTO79042", massy) == 600,
+        "RER C pooling must not include patterns that branch away before Massy - Palaiseau",
+    )
     fastest = router.fastest_path("PARIS9701", "PARIS166033")
     route = router.describe_path(*fastest, start_station="PARIS9701", end_station="PARIS166033") if fastest else None
     require(route is not None, "Place des Fêtes -> Danube should be routable")
@@ -353,10 +366,13 @@ def main() -> None:
     build = BUILD.read_text(encoding="utf-8")
     require("waitSecondsByDirection" in app and "waitSecondsByRoute" in app, "frontend does not use derived waits")
     if CITY_ID == "paris":
+        rer_routes = ["15302", "15307", "15314", "15323", "15324"]
         require(
-            data.get("interchangeableDirectionRoutes") == ["15314"]
-            and "interchangeableDirectionRoutes" in app,
-            "shared RER B trunk does not treat its destination patterns as interchangeable",
+            data.get("interchangeableDirectionRoutes") == rer_routes
+            and data.get("combinePatternsWithinRoutes") == rer_routes
+            and "interchangeableDirectionRoutes" in app
+            and "combinePatternsWithinRoutes" in app,
+            "Paris RER patterns are not interchangeable on their shared ride sections",
         )
         labels = {direction["label"] for direction in data["directions"].values() if direction["routeId"] == "15314"}
         require(

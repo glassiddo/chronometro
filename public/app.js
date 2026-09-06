@@ -17,8 +17,9 @@ const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
-const DATA_REVISION = ["paris", "london"].includes(CITY_ID)
-  ? "20260904-city-boundaries"
+const DATA_REVISION = CITY_ID === "paris"
+  ? "20260906-paris-rer-pooling"
+  : CITY_ID === "london" ? "20260904-city-boundaries"
   : CITY_ID === "berlin" ? "20260903-berlin-sbahn" : "20260903-six-cities";
 const BOSTON_BASEMAP_URL = "./data/boston/coastline.svg?v=20260903";
 
@@ -206,6 +207,7 @@ function formatLegBreakdown(leg) {
     leg.foldedWalkSec > 0 && waitSec > 0 ? `${formatPanelTime(waitSec)} wait` : "",
     leg.foldedWalkSec > 0 && transferSec > 0 ? `${formatPanelTime(transferSec)} transfer+walk` : "",
     !leg.foldedWalkSec && waitTransferSec > 0 ? `${formatPanelTime(waitTransferSec)} wait+transfer` : "",
+    usesInterchangeablePatterns(leg) ? `includes all suitable ${escapeHtml(route(leg.routeId).label)} trains` : "",
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : "";
 }
@@ -2342,16 +2344,19 @@ function combinedWaitSeconds(directionId, routeId, fromStation, toStation, baseW
   const r = route(routeId);
   const wait = baseWait ?? waitSeconds(directionId, routeId, r.mode);
   const group = (state.data.sharedServiceGroups || []).find((item) => item.routeIds?.includes(routeId));
-  if (!group) return wait;
+  const combineSameRoute = (state.data.combinePatternsWithinRoutes || []).includes(routeId);
+  if (!group && !combineSameRoute) return wait;
   const dir = direction(directionId);
   const startIndex = dir.stations.indexOf(fromStation);
   const endIndex = dir.stations.indexOf(toStation, startIndex + 1);
   if (startIndex < 0 || endIndex <= startIndex) return wait;
   const rideStations = dir.stations.slice(startIndex, endIndex + 1);
-  const waitsByRoute = new Map([[dir.frequencyGroup || routeId, wait]]);
+  const waitsByRoute = new Map([[dir.frequencyGroup || `${routeId}:${directionId}`, wait]]);
   Object.values(state.data.directions).forEach((candidate) => {
-    if (candidate.id === directionId || !group.routeIds.includes(candidate.routeId)) return;
-    if (candidate.routeId === routeId && !candidate.frequencyGroup) return;
+    if (candidate.id === directionId) return;
+    const sameRoutePattern = combineSameRoute && candidate.routeId === routeId;
+    const sharedRoute = candidate.routeId !== routeId && group?.routeIds.includes(candidate.routeId);
+    if (!sameRoutePattern && !sharedRoute) return;
     const width = rideStations.length;
     const matches = candidate.stations.some((_, index) =>
       index + width <= candidate.stations.length &&
@@ -2360,11 +2365,28 @@ function combinedWaitSeconds(directionId, routeId, fromStation, toStation, baseW
     if (!matches) return;
     const candidateRoute = route(candidate.routeId);
     const candidateWait = waitSeconds(candidate.id, candidate.routeId, candidateRoute.mode);
-    const serviceKey = candidate.frequencyGroup || candidate.routeId;
+    const serviceKey = candidate.frequencyGroup || (sameRoutePattern ? `${candidate.routeId}:${candidate.id}` : candidate.routeId);
     waitsByRoute.set(serviceKey, Math.min(candidateWait, waitsByRoute.get(serviceKey) ?? candidateWait));
   });
   if (waitsByRoute.size === 1) return wait;
   return Math.round(1 / [...waitsByRoute.values()].reduce((sum, candidateWait) => sum + 1 / candidateWait, 0));
+}
+
+function usesInterchangeablePatterns(step) {
+  if (stepType(step) !== "ride" || !(state.data.combinePatternsWithinRoutes || []).includes(step.routeId)) return false;
+  const dir = direction(step.directionId);
+  const startIndex = dir?.stations.indexOf(step.from) ?? -1;
+  const endIndex = dir?.stations.indexOf(step.to, startIndex + 1) ?? -1;
+  if (startIndex < 0 || endIndex <= startIndex) return false;
+  const rideStations = dir.stations.slice(startIndex, endIndex + 1);
+  return Object.values(state.data.directions).some((candidate) => {
+    if (candidate.routeId !== step.routeId || candidate.id === step.directionId) return false;
+    const width = rideStations.length;
+    return candidate.stations.some((_, index) =>
+      index + width <= candidate.stations.length &&
+      candidate.stations.slice(index, index + width).every((stationId, offset) => stationId === rideStations[offset]),
+    );
+  });
 }
 
 function routeContinuation(fromDirectionId) {
