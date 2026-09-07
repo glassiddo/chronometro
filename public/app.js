@@ -90,6 +90,16 @@ function restoreProgress() {
     const completedCount = ["result", "gave-up", "summary"].includes(p.stage) ? p.puzzleIndex + 1 : p.puzzleIndex;
     if (p.results.length < completedCount || p.results.slice(0, completedCount).some((result) => !result || !Number.isFinite(result.score))) return false;
     SAVED_FIELDS.forEach((field) => { state[field] = p[field]; });
+    normalizeWalkTimings();
+    if (["result", "summary"].includes(state.stage) && state.results[state.puzzleIndex]) {
+      const scored = scoreRoute(currentPuzzle(), state.totalSec);
+      state.results[state.puzzleIndex] = {
+        ...state.results[state.puzzleIndex],
+        score: scored.score,
+        totalSec: state.totalSec,
+        label: scored.label,
+      };
+    }
     setRoundLabel();
     return true;
   } catch {
@@ -2448,6 +2458,59 @@ function explicitWalkSeconds(fromStation, toStation, nextRouteId = null) {
   return Number.isFinite(equivalent) ? equivalent : null;
 }
 
+function resolvePendingWalk(nextRouteId) {
+  const walk = state.steps[state.steps.length - 1];
+  if (!walk || stepType(walk) !== "walk") return false;
+  const previousRide = state.steps[state.steps.length - 2];
+  if (!previousRide || stepType(previousRide) !== "ride") return true;
+  const previousRoute = route(previousRide.routeId);
+  const nextRoute = route(nextRouteId);
+  if (!previousRoute || !nextRoute) return true;
+  const resolvedSec = transferSeconds(
+    walk.from,
+    walk.to,
+    previousRide.routeId,
+    nextRouteId,
+    previousRoute.mode,
+    nextRoute.mode,
+  );
+  if (!Number.isFinite(resolvedSec) || resolvedSec <= 0) return true;
+  const oldSec = Number.isFinite(walk.transferSec) ? walk.transferSec : walk.elapsedSec || 0;
+  walk.transferSec = resolvedSec;
+  walk.elapsedSec = resolvedSec;
+  state.totalSec += resolvedSec - oldSec;
+  return true;
+}
+
+function normalizeWalkTimings() {
+  state.steps.forEach((walk, index) => {
+    if (stepType(walk) !== "walk") return;
+    const previousRide = state.steps[index - 1];
+    const nextRide = state.steps[index + 1];
+    if (!previousRide || stepType(previousRide) !== "ride" || !nextRide || stepType(nextRide) !== "ride") return;
+    const previousRoute = route(previousRide.routeId);
+    const nextRoute = route(nextRide.routeId);
+    if (!previousRoute || !nextRoute) return;
+    const resolvedSec = transferSeconds(
+      walk.from,
+      walk.to,
+      previousRide.routeId,
+      nextRide.routeId,
+      previousRoute.mode,
+      nextRoute.mode,
+    );
+    if (Number.isFinite(resolvedSec) && resolvedSec > 0) {
+      walk.transferSec = resolvedSec;
+      walk.elapsedSec = resolvedSec;
+    }
+    if (nextRide.from === walk.to && Number.isFinite(nextRide.transferSec) && nextRide.transferSec > 0) {
+      nextRide.elapsedSec -= nextRide.transferSec;
+      nextRide.transferSec = 0;
+    }
+  });
+  state.totalSec = state.steps.reduce((sum, step) => sum + (Number.isFinite(step.elapsedSec) ? step.elapsedSec : 0), 0);
+}
+
 function equivalentWalkSeconds(fromStation, toStation) {
   if (fromStation === toStation) return 0;
   if (canonicalStationId(fromStation) !== canonicalStationId(toStation)) return null;
@@ -2894,8 +2957,9 @@ function legTiming(selected, toStation, rideSec) {
     toStation,
   );
   let transferSec = 0;
+  const followsWalk = resolvePendingWalk(selected.routeId);
   const previous = lastRideStep();
-  if (previous && selected.boardStation === state.currentStation) {
+  if (previous && !followsWalk && selected.boardStation === state.currentStation) {
     const previousMode = route(previous.routeId).mode;
     const transfer = transferSeconds(
       state.currentStation,
@@ -3063,7 +3127,7 @@ function routeComparisonMarkup(userSteps, optimalSteps) {
   return `
     <div class="comparison">
       ${routePanel("Your route", userSteps)}
-      ${routePanel("Fastest route", optimalSteps, { foldWalks: true })}
+      ${routePanel("Fastest route", optimalSteps)}
     </div>
     <div class="comparison-tabs" data-comparison-tabs>
       <div class="comparison-tablist" role="tablist" aria-label="Route comparison">
@@ -3172,7 +3236,7 @@ function giveUp() {
         <div class="scorebox"><span>Score</span><strong>0</strong></div>
         <div class="scorebox"><span>Fastest time</span><strong>${formatTime(optimal.totalSec)}</strong></div>
       </div>
-      ${routePanel("Fastest route", optimalSteps, { foldWalks: true })}
+      ${routePanel("Fastest route", optimalSteps)}
       <div class="toolbar">
         <button class="action" id="nextPuzzle">${state.puzzleIndex + 1 === puzzleCount() ? "Summary" : "Next puzzle"}</button>
       </div>
