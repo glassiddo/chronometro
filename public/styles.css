@@ -940,6 +940,8 @@ h1 {
   min-height: 0;
 }
 
+.setup-active .date-lockup .city-picker { display: none; }
+
 .stop-list-controls {
   display: flex;
   align-items: center;
@@ -1348,6 +1350,69 @@ h1 {
   margin: 0;
   font-size: 42px;
 }
+
+.opening-screen {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.setup-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.setup-field select {
+  width: 100%;
+  border: 2px solid var(--rail);
+  border-radius: 6px;
+  padding: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.mode-picker {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.mode-picker legend {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 2px solid var(--line);
+  border-radius: 7px;
+  padding: 13px;
+  cursor: pointer;
+}
+
+.mode-option:has(input:checked) {
+  border-color: var(--rail);
+  background: #f6f8f7;
+}
+
+.mode-option input { margin-top: 4px; }
+.mode-option span { display: grid; gap: 3px; }
+.mode-option strong { font-size: 18px; }
+.mode-option small { color: var(--muted); font-size: 14px; line-height: 1.4; }
+.mode-result { margin: -10px 0 0; color: var(--muted); font-weight: 900; }
 
 .share {
   border: 2px solid var(--rail);

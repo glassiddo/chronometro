@@ -40,6 +40,10 @@ assert.equal(state.steps.length, 1);
 assert.equal(state.undoHistory.length, 1);
 assert.equal(state.changesOnly, true);
 
+state.mode = "hard";
+assert.equal(restoreProgress(), false, "Hard mode must not restore Easy progress");
+state.mode = "easy";
+
 state.dailyDate = "2026-09-05";
 assert.equal(restoreProgress(), false, "A different date must not restore yesterday's game");
 state.dailyDate = "2026-09-04";
@@ -57,6 +61,10 @@ for (const stage of ["result", "gave-up", "summary"]) {
 storage.set(progressKey(), "not JSON");
 assert.equal(restoreProgress(), false);
 storage.set(progressKey(), saved);
+const currentEasyKey = progressKey();
+storage.delete(currentEasyKey);
+storage.set(`chronometro:progress:paris:${state.dailyDate}:${state.dailyKind}`, saved);
+assert.equal(restoreProgress(), true, "Legacy progress must migrate as Easy mode progress");
 context.localStorage.getItem = () => { throw new Error("Storage blocked"); };
 context.localStorage.setItem = () => { throw new Error("Storage full"); };
 assert.equal(restoreProgress(), false);

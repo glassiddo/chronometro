@@ -23,6 +23,7 @@ const DATA_REVISION = CITY_ID === "paris"
   : CITY_ID === "london" ? "20260904-city-boundaries"
   : CITY_ID === "berlin" ? "20260903-berlin-sbahn" : CITY_ID === "madrid" ? "20260906-madrid" : "20260903-six-cities";
 const BOSTON_BASEMAP_URL = "./data/boston/coastline.svg?v=20260903";
+const MODE_PREFERENCE_KEY = "chronometro:mode";
 
 const state = {
   data: null,
@@ -39,6 +40,7 @@ const state = {
   results: [],
   undoHistory: [],
   changesOnly: true,
+  mode: "easy",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -46,6 +48,10 @@ const $ = (selector) => document.querySelector(selector);
 const SAVED_FIELDS = ["puzzleIndex", "currentStation", "steps", "totalSec", "stage", "selected", "results", "undoHistory", "changesOnly"];
 
 function progressKey() {
+  return `chronometro:progress:${CITY_ID}:${state.dailyDate}:${state.dailyKind}:${state.mode}`;
+}
+
+function legacyProgressKey() {
   return `chronometro:progress:${CITY_ID}:${state.dailyDate}:${state.dailyKind}`;
 }
 
@@ -65,7 +71,9 @@ function saveProgress() {
 
 function restoreProgress() {
   try {
-    const saved = JSON.parse(localStorage.getItem(progressKey()));
+    const serialized = localStorage.getItem(progressKey())
+      || (state.mode === "easy" ? localStorage.getItem(legacyProgressKey()) : null);
+    const saved = JSON.parse(serialized);
     if (saved?.version !== 1 || saved.signature !== progressSignature()) return false;
     const p = saved.progress;
     if (!p || !Number.isInteger(p.puzzleIndex) || p.puzzleIndex < 0 || p.puzzleIndex >= puzzleCount()
@@ -87,6 +95,10 @@ function restoreProgress() {
   } catch {
     return false;
   }
+}
+
+function modeLabel() {
+  return state.mode === "hard" ? "Hard mode" : "Easy mode";
 }
 
 function renderSavedProgress() {
@@ -301,7 +313,7 @@ function setRoundLabel() {
   const example = state.dailyKind.includes("example");
   $("#todayLabel").textContent = example ? "Practice puzzles" : date === cityDateString() ? date : `${date} · Archive`;
   $("#roundLabel").textContent =
-    state.stage === "summary" ? "Done" : `${state.puzzleIndex + 1} / ${puzzleCount()}`;
+    state.stage === "setup" ? "Choose game" : state.stage === "summary" ? "Done" : `${state.puzzleIndex + 1} / ${puzzleCount()}`;
 }
 
 function currentPuzzle() {
@@ -2275,6 +2287,7 @@ function bindPuzzleToolbar() {
 }
 
 function boardShell(content, { showRouteSummary = true } = {}) {
+  document.body.classList.remove("setup-active");
   const puzzle = currentPuzzle();
   const hasRouteSummary = showRouteSummary && state.steps.length > 0;
   const boardClass = showRouteSummary ? "board" : "board board--result";
@@ -2736,7 +2749,7 @@ function renderAlightStep() {
     const services = station(stationId).services || {};
     const availableRouteIds = new Set(Object.keys(services));
     stationInterchangeRouteIds(stationId).forEach((routeId) => availableRouteIds.add(routeId));
-    const transferBadges = [...availableRouteIds]
+    const transferBadges = state.mode === "hard" ? "" : [...availableRouteIds]
       .filter((routeId) => routeId !== selected.routeId && route(routeId))
       .sort((a, b) => compareText(route(a).label, route(b).label))
       .map(lineBadge)
@@ -2753,7 +2766,7 @@ function renderAlightStep() {
       <span>${escapeHtml(routeDisplayName(r))} · ${escapeHtml(selected.directionLabel || directionGroupLabel(dir.label))}</span>
     </div>
     <div class="stop-list-controls">
-      <label><input type="checkbox" id="changesOnly" ${state.changesOnly ? "checked" : ""}> Changes only</label>
+      ${state.mode === "easy" ? `<label><input type="checkbox" id="changesOnly" ${state.changesOnly ? "checked" : ""}> Changes only</label>` : `<span>All stops</span>`}
       <span>Ride times</span>
     </div>
     <div class="stop-strip" aria-label="${escapeHtml(routeDisplayName(r))} ${escapeHtml(selected.directionLabel || directionGroupLabel(dir.label))}">
@@ -2781,7 +2794,7 @@ function renderAlightStep() {
       const hasChange = [...stationLineIds(id), ...stationInterchangeRouteIds(id)].some((routeId) => routeId !== selected.routeId)
         || Object.keys(state.data.transfers?.[id] || {}).some((to) => to !== id)
         || isMandatoryMadridSameLineChange(id, selected.routeId);
-      button.hidden = state.changesOnly && !hasChange && !samePuzzleStation(id, currentPuzzle().end);
+      button.hidden = state.mode === "easy" && state.changesOnly && !hasChange && !samePuzzleStation(id, currentPuzzle().end);
       if (!button.hidden) visibleCount += 1;
     });
     let empty = $("#noChangeStops");
@@ -2794,7 +2807,7 @@ function renderAlightStep() {
     }
     empty.hidden = visibleCount > 0;
   };
-  $("#changesOnly").addEventListener("change", (event) => {
+  $("#changesOnly")?.addEventListener("change", (event) => {
     state.changesOnly = event.target.checked;
     updateStopFilter();
     saveProgress();
@@ -3120,6 +3133,7 @@ function renderResult() {
     <div class="result">
       <div class="step-title">
         <h2>${scored.label}</h2>
+        <span>${modeLabel()}</span>
       </div>
       <div class="scoreboard">
         <div class="scorebox"><span>Score</span><strong>${scored.score}</strong></div>
@@ -3152,6 +3166,7 @@ function giveUp() {
     <div class="result">
       <div class="step-title">
         <h2>Gave up</h2>
+        <span>${modeLabel()}</span>
       </div>
       <div class="scoreboard">
         <div class="scorebox"><span>Score</span><strong>0</strong></div>
@@ -3181,7 +3196,7 @@ function shareScores() {
 
 function shareText(total) {
   const puzzleLabel = state.dailyKind.includes("example") ? "Practice" : state.dailyDate || cityDateString();
-  return `chronometro.cc · ${state.data.metadata.city.name} · ${puzzleLabel}\n${total}/${puzzleCount() * 100}\nScores: ${shareScores()}`;
+  return `chronometro.cc · ${state.data.metadata.city.name} · ${modeLabel()} · ${puzzleLabel}\n${total}/${puzzleCount() * 100}\nScores: ${shareScores()}`;
 }
 
 async function copyText(text) {
@@ -3213,6 +3228,7 @@ function renderSummary() {
   $("#game").innerHTML = `
     <section class="summary">
       <h2>Terminus</h2>
+      <p class="mode-result">${escapeHtml(state.data.metadata.city.name)} · ${modeLabel()}</p>
       <div class="scoreboard">
         <div class="scorebox"><span>Total score</span><strong>${total}</strong></div>
         <div class="scorebox"><span>Puzzles</span><strong>${puzzleCount()}</strong></div>
@@ -3242,6 +3258,94 @@ function restartDay() {
   state.puzzleIndex = 0;
   state.results = [];
   startPuzzle();
+}
+
+function selectedModePreference() {
+  const requestedMode = new URLSearchParams(window.location.search).get("mode");
+  if (["easy", "hard"].includes(requestedMode)) return requestedMode;
+  try {
+    const savedMode = localStorage.getItem(MODE_PREFERENCE_KEY);
+    return ["easy", "hard"].includes(savedMode) ? savedMode : "easy";
+  } catch {
+    return "easy";
+  }
+}
+
+function hasCurrentProgress(mode) {
+  try {
+    const key = `chronometro:progress:${CITY_ID}:${state.dailyDate}:${state.dailyKind}:${mode}`;
+    return Boolean(localStorage.getItem(key) || (mode === "easy" && localStorage.getItem(legacyProgressKey())));
+  } catch {
+    return false;
+  }
+}
+
+function cityOptionsMarkup(selectedCity) {
+  return [...$("#citySelector").options].map((option) => `
+    <option value="${escapeHtml(option.value)}"${option.value === selectedCity ? " selected" : ""}>${escapeHtml(option.textContent)}</option>
+  `).join("");
+}
+
+function renderOpeningScreen() {
+  state.stage = "setup";
+  document.body.classList.add("setup-active");
+  setRoundLabel();
+  const preferredMode = selectedModePreference();
+  state.mode = preferredMode;
+  $("#game").innerHTML = `
+    <section class="summary opening-screen">
+      <div>
+        <p class="kicker">Daily route puzzle</p>
+        <h2>Choose your game</h2>
+      </div>
+      <label class="setup-field">
+        <span>City</span>
+        <select id="openingCity">${cityOptionsMarkup(CITY_ID)}</select>
+      </label>
+      <fieldset class="mode-picker">
+        <legend>Mode</legend>
+        <label class="mode-option">
+          <input type="radio" name="gameMode" value="easy"${preferredMode === "easy" ? " checked" : ""}>
+          <span><strong>Easy</strong><small>Shows available connections at each stop.</small></span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="gameMode" value="hard"${preferredMode === "hard" ? " checked" : ""}>
+          <span><strong>Hard</strong><small>Connections and walking transfers are revealed only after you exit.</small></span>
+        </label>
+      </fieldset>
+      <div class="toolbar">
+        <button class="action" id="beginGame">${hasCurrentProgress(preferredMode) ? "Resume" : "Start"}</button>
+      </div>
+    </section>
+  `;
+  const refreshButton = () => {
+    const selectedCity = $("#openingCity").value;
+    const selectedMode = document.querySelector('input[name="gameMode"]:checked').value;
+    $("#beginGame").textContent = selectedCity === CITY_ID && hasCurrentProgress(selectedMode) ? "Resume" : "Start";
+  };
+  $("#openingCity").addEventListener("change", refreshButton);
+  document.querySelectorAll('input[name="gameMode"]').forEach((input) => input.addEventListener("change", refreshButton));
+  $("#beginGame").addEventListener("click", () => {
+    const cityId = $("#openingCity").value;
+    const mode = document.querySelector('input[name="gameMode"]:checked').value;
+    try { localStorage.setItem(MODE_PREFERENCE_KEY, mode); } catch { /* Preferences are optional. */ }
+    if (cityId !== CITY_ID) {
+      const url = new URL(window.location.href);
+      if (cityId === "paris") url.searchParams.delete("city");
+      else url.searchParams.set("city", cityId);
+      url.searchParams.set("mode", mode);
+      url.searchParams.set("play", "1");
+      window.location.assign(url);
+      return;
+    }
+    state.mode = mode;
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", mode);
+    window.history.replaceState({}, "", url);
+    if (restoreProgress()) renderSavedProgress();
+    else startPuzzle();
+  });
+  focusGameHeading();
 }
 
 function startPuzzle() {
@@ -3363,6 +3467,7 @@ function bindCitySelector() {
     const url = new URL(window.location.href);
     if (event.target.value === "paris") url.searchParams.delete("city");
     else url.searchParams.set("city", event.target.value);
+    url.searchParams.set("mode", state.mode);
     window.location.assign(url);
   });
 }
@@ -3372,7 +3477,7 @@ async function init() {
   showLoadingState();
   bindCitySelector();
   $("#homeButton").addEventListener("click", () => {
-    if (state.data) restartDay();
+    if (state.data) renderOpeningScreen();
   });
   const [network, puzzleSet, riverData] = await Promise.all([
     fetchJson(NETWORK_URL),
@@ -3387,8 +3492,16 @@ async function init() {
   state.daily = puzzleSet.puzzles;
   state.dailyDate = puzzleSet.date;
   state.dailyKind = puzzleSet.kind;
-  if (restoreProgress()) renderSavedProgress();
-  else startPuzzle();
+  if (new URLSearchParams(window.location.search).get("play") === "1") {
+    state.mode = selectedModePreference();
+    const url = new URL(window.location.href);
+    url.searchParams.delete("play");
+    window.history.replaceState({}, "", url);
+    if (restoreProgress()) renderSavedProgress();
+    else startPuzzle();
+  } else {
+    renderOpeningScreen();
+  }
 }
 
 init().catch(() => {
