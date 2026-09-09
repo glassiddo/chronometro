@@ -14,8 +14,10 @@ context.network = network;
 vm.runInContext("state.data = network", context);
 const evaluate = (expression) => vm.runInContext(expression, context);
 let rides = 0;
+let puzzles = 0;
 for (const day of read("public/data/berlin/daily/index.json").dates) {
   for (const puzzle of read(`public/data/berlin/daily/${day}.json`).puzzles) {
+    puzzles++;
     let previous = null;
     for (const step of puzzle.optimalRoute.steps) {
       context.step = step;
@@ -38,4 +40,4 @@ for (const direction of Object.values(network.directions).filter(d => d.circular
   assert.equal(actual, direction.runtimes[26] + direction.runtimes[27]);
   assert.equal(new Set(direction.stations.slice(27, 53)).size, 26);
 }
-console.log(`Berlin frontend timing parity passed: ${rides} rides across 135 puzzles, both ring seams`);
+console.log(`Berlin frontend timing parity passed: ${rides} rides across ${puzzles} puzzles, both ring seams`);

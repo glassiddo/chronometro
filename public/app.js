@@ -19,9 +19,9 @@ const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
 const FALLBACK_DAILY_COUNT = 5;
 const STATION_EQUIVALENCE_TRANSFER_SECONDS = 120;
 const DATA_REVISION = CITY_ID === "paris"
-  ? "20260906-paris-rer-pooling"
-  : CITY_ID === "london" ? "20260904-city-boundaries"
-  : CITY_ID === "berlin" ? "20260903-berlin-sbahn" : CITY_ID === "madrid" ? "20260906-madrid" : "20260903-six-cities";
+  ? "20260909-timing-parity"
+  : CITY_ID === "london" ? "20260909-timing-parity"
+  : CITY_ID === "berlin" ? "20260909-timing-parity" : CITY_ID === "madrid" ? "20260906-madrid" : "20260909-timing-parity";
 const BOSTON_BASEMAP_URL = "./data/boston/coastline.svg?v=20260903";
 const MODE_PREFERENCE_KEY = "chronometro:mode";
 
@@ -333,9 +333,9 @@ function currentPuzzle() {
 function ridePathStationIds(step) {
   const dir = direction(step.directionId);
   if (!dir) return [];
+  const span = directionRideSpan(dir, step.from, step.to);
+  if (span) return dir.stations.slice(span.fromIndex, span.toIndex + 1);
   const fromIndex = dir.stations.indexOf(step.from);
-  const toIndex = dir.stations.indexOf(step.to, fromIndex + 1);
-  if (fromIndex >= 0 && toIndex > fromIndex) return dir.stations.slice(fromIndex, toIndex + 1);
   const continuation = routeContinuation(step.directionId);
   if (!continuation || fromIndex < 0 || dir.stations[dir.stations.length - 1] !== continuation.stationId) return [];
   const nextDir = direction(continuation.toDirectionId);
@@ -2374,10 +2374,9 @@ function combinedWaitSeconds(directionId, routeId, fromStation, toStation, baseW
   const combineSameRoute = (state.data.combinePatternsWithinRoutes || []).includes(routeId);
   if (!group && !combineSameRoute) return wait;
   const dir = direction(directionId);
-  const startIndex = dir.stations.indexOf(fromStation);
-  const endIndex = dir.stations.indexOf(toStation, startIndex + 1);
-  if (startIndex < 0 || endIndex <= startIndex) return wait;
-  const rideStations = dir.stations.slice(startIndex, endIndex + 1);
+  const span = directionRideSpan(dir, fromStation, toStation);
+  if (!span) return wait;
+  const rideStations = dir.stations.slice(span.fromIndex, span.toIndex + 1);
   const waitsByRoute = new Map([[dir.frequencyGroup || `${routeId}:${directionId}`, wait]]);
   Object.values(state.data.directions).forEach((candidate) => {
     if (candidate.id === directionId) return;
@@ -2402,10 +2401,9 @@ function combinedWaitSeconds(directionId, routeId, fromStation, toStation, baseW
 function usesInterchangeablePatterns(step) {
   if (stepType(step) !== "ride" || !(state.data.combinePatternsWithinRoutes || []).includes(step.routeId)) return false;
   const dir = direction(step.directionId);
-  const startIndex = dir?.stations.indexOf(step.from) ?? -1;
-  const endIndex = dir?.stations.indexOf(step.to, startIndex + 1) ?? -1;
-  if (startIndex < 0 || endIndex <= startIndex) return false;
-  const rideStations = dir.stations.slice(startIndex, endIndex + 1);
+  const span = dir ? directionRideSpan(dir, step.from, step.to) : null;
+  if (!span) return false;
+  const rideStations = dir.stations.slice(span.fromIndex, span.toIndex + 1);
   return Object.values(state.data.directions).some((candidate) => {
     if (candidate.routeId !== step.routeId || candidate.id === step.directionId) return false;
     const width = rideStations.length;
@@ -2779,9 +2777,14 @@ function renderAlightStep() {
   const choiceMap = new Map();
   directionCandidates.forEach((candidate) => {
     const candidateDir = direction(candidate.dirId);
-    const boardIndex = candidateDir.stations.indexOf(candidate.boardStation);
-    const downstream = candidateDir.stations.slice(boardIndex + 1,
-      candidateDir.circular ? boardIndex + candidateDir.ringStationCount : undefined);
+    const downstream = [];
+    candidateDir.stations.forEach((stationId, boardIndex) => {
+      if (stationId !== candidate.boardStation) return;
+      const stopIndex = candidateDir.circular
+        ? Math.min(candidateDir.stations.length, boardIndex + candidateDir.ringStationCount + 1)
+        : candidateDir.stations.length;
+      downstream.push(...candidateDir.stations.slice(boardIndex + 1, stopIndex));
+    });
     const continuation = routeContinuation(candidate.dirId);
     if (continuation && candidateDir.stations[candidateDir.stations.length - 1] === continuation.stationId) {
       downstream.push(...direction(continuation.toDirectionId).stations.slice(1));
@@ -2887,12 +2890,27 @@ function renderAlightStep() {
   bindPuzzleToolbar();
 }
 
+function directionRideSpan(dir, fromStation, toStation) {
+  let best = null;
+  dir.stations.forEach((stationId, fromIndex) => {
+    if (stationId !== fromStation) return;
+    const maximumStops = dir.circular ? dir.ringStationCount : dir.stations.length;
+    const stopIndex = Math.min(dir.stations.length, fromIndex + maximumStops + 1);
+    for (let toIndex = fromIndex + 1; toIndex < stopIndex; toIndex += 1) {
+      if (dir.stations[toIndex] !== toStation) continue;
+      const runtime = dir.runtimes.slice(fromIndex, toIndex).reduce((sum, sec) => sum + sec, 0);
+      if (!best || runtime < best.runtime) best = { fromIndex, toIndex, runtime };
+    }
+  });
+  return best;
+}
+
 function runtimeBetween(dirId, fromStation, toStation) {
   const dir = direction(dirId);
+  const span = directionRideSpan(dir, fromStation, toStation);
+  if (span) return span.runtime;
   const fromIndex = dir.stations.indexOf(fromStation);
-  const toIndex = dir.stations.indexOf(toStation, fromIndex + 1);
   if (fromIndex < 0) return null;
-  if (toIndex > fromIndex) return dir.runtimes.slice(fromIndex, toIndex).reduce((sum, sec) => sum + sec, 0);
 
   const continuation = routeContinuation(dirId);
   if (!continuation || dir.stations[dir.stations.length - 1] !== continuation.stationId) return null;
@@ -2933,9 +2951,9 @@ function bestEquivalentDirectionCandidate(selected, toStation) {
 
 function rideSegmentsBetween(dirId, fromStation, toStation) {
   const dir = direction(dirId);
+  const span = directionRideSpan(dir, fromStation, toStation);
+  if (span) return [{ directionId: dirId, from: fromStation, to: toStation }];
   const fromIndex = dir.stations.indexOf(fromStation);
-  const toIndex = dir.stations.indexOf(toStation, fromIndex + 1);
-  if (fromIndex >= 0 && toIndex > fromIndex) return [{ directionId: dirId, from: fromStation, to: toStation }];
 
   const continuation = routeContinuation(dirId);
   if (!continuation || fromIndex < 0 || dir.stations[dir.stations.length - 1] !== continuation.stationId) return [];
@@ -3514,7 +3532,7 @@ function showLoadingState() {
 function updateCityChrome() {
   const city = state.data.metadata.city;
   $("#citySelector").value = CITY_ID;
-  $("#cityKicker").textContent = CITY_ID === "berlin" ? "Berlin U-Bahn + S-Bahn · Daily route puzzle" : "Daily route puzzle";
+  $("#cityKicker").textContent = "Daily route puzzle";
   document.title = `Chronométro — ${city.name}`;
   document.documentElement.dataset.city = CITY_ID;
   document.querySelectorAll(".site-footer nav a").forEach((link) => {

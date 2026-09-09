@@ -1196,14 +1196,17 @@ class Router:
 
     def runtime_between(self, direction_id: str, from_station: str, to_station: str) -> int | None:
         direction = self.directions[direction_id]
-        try:
-            from_index = direction["stations"].index(from_station)
-            to_index = direction["stations"].index(to_station, from_index + 1)
-        except ValueError:
-            return None
-        if to_index <= from_index:
-            return None
-        return sum(direction["runtimes"][from_index:to_index])
+        stations = direction["stations"]
+        maximum_stops = direction.get("ringStationCount", len(stations))
+        candidates = []
+        for from_index, station_id in enumerate(stations):
+            if station_id != from_station:
+                continue
+            stop_index = min(len(stations), from_index + maximum_stops + 1)
+            for to_index in range(from_index + 1, stop_index):
+                if stations[to_index] == to_station:
+                    candidates.append(sum(direction["runtimes"][from_index:to_index]))
+        return min(candidates) if candidates else None
 
     def add_timing_breakdown(
         self,
@@ -1234,11 +1237,8 @@ class Router:
                     from_node = self.nodes[route_nodes[route_node_index - 1]]
                     to_node = self.nodes[route_nodes[route_node_index]]
                     if from_node["dirId"] == to_node["dirId"]:
-                        hidden_ride = self.runtime_between(
-                            from_node["dirId"],
-                            from_node["stationId"],
-                            to_node["stationId"],
-                        )
+                        direction = self.directions[from_node["dirId"]]
+                        hidden_ride = sum(direction["runtimes"][from_node["index"]:to_node["index"]])
                         ride_sec += hidden_ride if hidden_ride is not None else 0
                         continue
                     to_route = self.routes[to_node["routeId"]]
@@ -1282,11 +1282,8 @@ class Router:
             from_node = self.nodes[route_nodes[route_node_index - 1]]
             to_node = self.nodes[route_nodes[route_node_index]]
             if from_node["dirId"] == to_node["dirId"]:
-                ride_sec = self.runtime_between(
-                    from_node["dirId"],
-                    from_node["stationId"],
-                    to_node["stationId"],
-                )
+                direction = self.directions[from_node["dirId"]]
+                ride_sec = sum(direction["runtimes"][from_node["index"]:to_node["index"]])
                 totals["rideSec"] += ride_sec if ride_sec is not None else 0
                 continue
             to_route = self.routes[to_node["routeId"]]
@@ -1384,11 +1381,8 @@ class Router:
         def add_ride_runtime(from_node: dict, to_node: dict) -> None:
             if current_ride is None:
                 return
-            hidden_ride = self.runtime_between(
-                from_node["dirId"],
-                from_node["stationId"],
-                to_node["stationId"],
-            )
+            direction = self.directions[from_node["dirId"]]
+            hidden_ride = sum(direction["runtimes"][from_node["index"]:to_node["index"]])
             current_ride["rideSec"] += hidden_ride if hidden_ride is not None else 0
             current_ride["to"] = to_node["stationId"]
             current_ride["segments"][-1]["to"] = to_node["stationId"]
@@ -1487,7 +1481,6 @@ class Router:
                 step["routeId"],
                 step["from"],
                 step["to"],
-                step["waitSec"],
             )
             wait_reduction = step["waitSec"] - combined_wait
             if wait_reduction <= 0:

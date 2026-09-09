@@ -22,7 +22,7 @@ def require(condition: bool, message: str) -> None:
 def main() -> None:
     daily_dir = ROOT / "public/data/berlin/daily"
     dates = json.loads((daily_dir / "index.json").read_text(encoding="utf-8"))["dates"]
-    require(len(dates) == 27 and dates[0] == "2026-10-05" and dates[-1] == "2026-10-31", "Berlin active calendar must cover October 5–31")
+    require(len(dates) == 53 and dates[0] == "2026-09-09" and dates[-1] == "2026-10-31", "Berlin active calendar must cover September 9–October 31")
     build_data.configure_city("berlin")
     network_path = ROOT / "public/data/berlin/network.json"
     network = json.loads(network_path.read_text(encoding="utf-8"))
@@ -188,7 +188,7 @@ def main() -> None:
         result = router.describe_path(path[0], path[1], station_by_name[left_name], station_by_name[right_name])
         require(result and result["totalSec"] > 0, f"journey description failed: {left_name} to {right_name}")
         print(f"journey {left_name} -> {right_name}: {round(result['totalSec'] / 60)} min, {len(result['legs'])} legs")
-    print(f"Berlin U/S-Bahn valid: 25 lines, {len(network['stations'])} parent stations, {len(network['directions'])} scheduled patterns; 135 transfer-required puzzles verified")
+    print(f"Berlin U/S-Bahn valid: 25 lines, {len(network['stations'])} parent stations, {len(network['directions'])} scheduled patterns; {len(dates) * 5} transfer-required puzzles verified")
 
 
 if __name__ == "__main__":

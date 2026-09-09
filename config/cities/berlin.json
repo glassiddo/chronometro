@@ -105,8 +105,8 @@
     "exactRideRouting": true
   },
   "puzzles": {
-    "startDate": "2026-10-05",
-    "days": 27,
+    "startDate": "2026-09-09",
+    "days": 53,
     "dailyCount": 5,
     "exampleCount": 100,
     "minimumRouteDistanceMetres": 2000,

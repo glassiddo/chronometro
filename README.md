@@ -21,7 +21,7 @@ The normal 37-stop T1 is restored from RATP's official full-line plan and an arc
 ### Boston
 
 - Red, Orange, Blue, Green B/C/D/E, and Mattapan
-- Daily puzzles from 30 August through 31 October 2026
+- Active daily puzzles from 9 September through 31 October 2026
 - Excludes buses (including Silver Line), Commuter Rail, and ferries
 
 ### London
@@ -55,7 +55,7 @@ Complete scheduled `stop_times.txt` patterns preserve the terminal branches, sha
 - U1–U9 and all 16 regular S-Bahn lines, including S15; 316 distinct VBB parent stations
 - All S-Bahn branches remain available for routing, including Brandenburg; S-Bahn puzzle endpoints are restricted to the official Berlin state polygon
 - Excludes temporary U12, discontinued S45, diversions, replacement buses, trams, ferries, regional and long-distance rail
-- Active daily puzzles: 5–31 October 2026, with U-Bahn-only, mixed, and S-Bahn-only solutions every day; all require a transfer
+- Active daily puzzles: 9 September–31 October 2026, with U-Bahn-only, mixed, and S-Bahn-only solutions every day; all require a transfer
 
 The normal network combines VBB scheduled patterns with the official regular S-Bahn timetable. VBB’s 2021 archive restores U6 north and the northbound Wollankstraße stop on S1, S25, and S85. S41 runs clockwise and S42 counterclockwise, including across the stored ring seam. See [Berlin data and verification](docs/berlin-data.md).
 
@@ -140,7 +140,7 @@ No city uses live service status, disruptions, closures, fares, accessibility, c
 - `public/data/chicago/` — Chicago network, examples, and daily puzzles
 - `public/data/washington-dc/` — Washington network, examples, and daily puzzles
 - `public/data/boston/` — Boston network, examples, and daily puzzles
-- `public/data/berlin/` — Berlin network, examples, and daily puzzles through October
+- `public/data/berlin/` — Berlin network, examples, and daily puzzles from 9 September through October 2026
 - `public/data/madrid/` — Madrid network, examples, and daily puzzles through December 2026
 - `config/cities/` — city coverage, timing assumptions, output paths, and attribution
 - `scripts/build_city.py` — city-neutral build entry point

@@ -10,7 +10,7 @@ Platforms collapse only through explicit `parent_station`; stable `place-*` IDs 
 
 The feed records Park Street–Downtown Crossing platform transfers through the Winter Street Concourse (180–222 seconds walking plus 105 seconds buffer). The game uses a conservative five-minute walk each way. All other inter-station walks are excluded.
 
-The daily puzzle calendar runs from 2026-08-30 through 2026-10-31 (63 days). Expected waits are half the median scheduled pattern gap, with direction, route, then mode fallback (four minutes rapid transit; five minutes light rail). A Green branch uses its own departures, not combined trunk frequency. Puzzles after feed expiry remain a deterministic snapshot and do not claim future service changes.
+The active daily puzzle calendar runs from 2026-09-09 through 2026-10-31 (53 days). Expected waits are half the median scheduled pattern gap, with direction, route, then mode fallback (four minutes rapid transit; five minutes light rail). A Green branch uses its own departures, not combined trunk frequency. Puzzles after feed expiry remain a deterministic snapshot and do not claim future service changes.
 
 The MassDOT Developers License Agreement permits derived/commercial products but requires clear MassDOT acknowledgement and its warranty/liability disclaimer; it does not grant endorsement or general mark use. Chronométro credits MassDOT/MBTA, disclaims affiliation/endorsement, and uses no MBTA logo or official map.
 
