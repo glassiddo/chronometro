@@ -11,17 +11,24 @@ const context = vm.createContext({
   document: { querySelector: () => ({ textContent: "" }) },
 });
 vm.runInContext(source.slice(0, source.lastIndexOf("init().catch(")) + `
-  globalThis.testApi = { state, legTiming, normalizeWalkTimings };
+  globalThis.testApi = { state, legTiming, normalizeWalkTimings, routeComparisonMarkup };
 `, context);
 
-const { state, legTiming, normalizeWalkTimings } = context.testApi;
+const { state, legTiming, normalizeWalkTimings, routeComparisonMarkup } = context.testApi;
 state.data = {
   routes: {
     previous: { id: "previous", mode: "metro", label: "Previous" },
     next: { id: "next", mode: "metro", label: "Next" },
   },
   directions: {
+    previousDirection: { id: "previousDirection", routeId: "previous", stations: ["origin", "walk-from"] },
     nextDirection: { id: "nextDirection", routeId: "next", stations: ["walk-to", "destination"] },
+  },
+  stations: {
+    origin: { id: "origin", name: "Origin" },
+    "walk-from": { id: "walk-from", name: "Transfer station" },
+    "walk-to": { id: "walk-to", name: "Transfer station" },
+    destination: { id: "destination", name: "Destination" },
   },
   metadata: {
     waitSecondsByDirection: { nextDirection: 35 },
@@ -67,5 +74,12 @@ assert.equal(state.steps[1].elapsedSec, 108, "Restored walks must be resolved ag
 assert.equal(state.steps[2].transferSec, 0, "Restored routes must lose the duplicate post-walk interchange");
 assert.equal(state.steps[2].elapsedSec, 95);
 assert.equal(state.totalSec, 303, "Restored total time must be rebuilt from normalized steps");
+
+const comparison = routeComparisonMarkup([], state.steps);
+assert.equal(
+  comparison.match(/Walk to Transfer station/g)?.length,
+  2,
+  "Desktop and tabbed fastest-route summaries must both show the interchange walk",
+);
 
 console.log("Frontend walk timing: route-specific and generic transfers passed.");

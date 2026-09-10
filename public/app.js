@@ -227,9 +227,7 @@ function formatLegBreakdown(leg) {
   const parts = [
     Number.isFinite(totalSec) && totalSec > 0 ? formatPanelTime(totalSec) : "",
     Number.isFinite(leg.rideSec) && leg.rideSec > 0 ? `${formatPanelTime(leg.rideSec)} ride` : "",
-    leg.foldedWalkSec > 0 && waitSec > 0 ? `${formatPanelTime(waitSec)} wait` : "",
-    leg.foldedWalkSec > 0 && transferSec > 0 ? `${formatPanelTime(transferSec)} transfer+walk` : "",
-    !leg.foldedWalkSec && waitTransferSec > 0 ? `${formatPanelTime(waitTransferSec)} wait+transfer` : "",
+    waitTransferSec > 0 ? `${formatPanelTime(waitTransferSec)} wait+transfer` : "",
     usesInterchangeablePatterns(leg) ? `includes all suitable ${escapeHtml(route(leg.routeId).label)} trains` : "",
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : "";
@@ -3095,32 +3093,7 @@ function scoreRoute(puzzle, totalSec) {
   return { score, label: "Slow route" };
 }
 
-function reviewVisibleSteps(steps, { foldWalks = false } = {}) {
-  if (foldWalks) {
-    const visible = [];
-    let pendingWalkSec = 0;
-    steps.forEach((step) => {
-      if (stepType(step) === "walk") {
-        pendingWalkSec += Number.isFinite(step.transferSec) ? step.transferSec : step.elapsedSec || 0;
-        return;
-      }
-      const visibleStep = { ...step };
-      if (pendingWalkSec > 0) {
-        visibleStep.transferSec = (Number.isFinite(visibleStep.transferSec) ? visibleStep.transferSec : 0) + pendingWalkSec;
-        visibleStep.elapsedSec = (Number.isFinite(visibleStep.elapsedSec) ? visibleStep.elapsedSec : 0) + pendingWalkSec;
-        visibleStep.foldedWalkSec = pendingWalkSec;
-        pendingWalkSec = 0;
-      }
-      visible.push(visibleStep);
-    });
-    if (pendingWalkSec > 0 && visible.length) {
-      const last = visible[visible.length - 1];
-      last.transferSec = (Number.isFinite(last.transferSec) ? last.transferSec : 0) + pendingWalkSec;
-      last.elapsedSec = (Number.isFinite(last.elapsedSec) ? last.elapsedSec : 0) + pendingWalkSec;
-      last.foldedWalkSec = (last.foldedWalkSec || 0) + pendingWalkSec;
-    }
-    return visible;
-  }
+function reviewVisibleSteps(steps) {
   return steps.filter((step, index) => {
     if (stepType(step) !== "walk") return true;
     const adjacentRides = [steps[index - 1], steps[index + 1]].filter(
@@ -3130,8 +3103,8 @@ function reviewVisibleSteps(steps, { foldWalks = false } = {}) {
   });
 }
 
-function routePanel(title, steps, { foldWalks = false } = {}) {
-  const visibleSteps = reviewVisibleSteps(steps, { foldWalks });
+function routePanel(title, steps) {
+  const visibleSteps = reviewVisibleSteps(steps);
   return `
     <div class="route-panel">
       <h3>${escapeHtml(title)}</h3>
@@ -3155,7 +3128,7 @@ function routeComparisonMarkup(userSteps, optimalSteps) {
         ${routePanel("Your route", userSteps)}
       </div>
       <div class="comparison-tabpanel" data-route-panel="fastest" hidden>
-        ${routePanel("Fastest route", optimalSteps, { foldWalks: true })}
+        ${routePanel("Fastest route", optimalSteps)}
       </div>
     </div>
   `;
