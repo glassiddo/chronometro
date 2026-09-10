@@ -2634,7 +2634,7 @@ function renderLineStep(message = "") {
   state.stage = "line";
   const options = boardingOptions();
   const walks = walkOptions();
-  const compactRouteChoices = ["chicago", "washington-dc", "boston", "berlin", "madrid"].includes(CITY_ID);
+  const compactRouteChoices = ["chicago", "washington-dc", "boston", "berlin"].includes(CITY_ID);
   boardShell(`
     <div class="step-title">
       <h2>Choose your next move</h2>
@@ -2654,8 +2654,7 @@ function renderLineStep(message = "") {
                   return `
                     <button class="choice line-choice" data-line-index="${index}"${compactRouteChoices ? ` aria-label="${sameLineChange ? "Change trains · Line" : "Board"} ${escapeHtml(routeDisplayName(r))}"` : ""}>
                       ${lineChoiceMarker(option.routeId)}
-                      ${sameLineChange ? `<span><strong>Change trains · Line ${escapeHtml(routeDisplayName(r))}</strong></span>` : ""}
-                      ${compactRouteChoices ? "" : `<span>
+                      ${sameLineChange ? `<span><strong>Change trains · Line ${escapeHtml(routeDisplayName(r))}</strong></span>` : compactRouteChoices ? "" : `<span>
                         <strong>${escapeHtml(routeChoiceLabel(r))}</strong>
                       </span>`}
                     </button>
