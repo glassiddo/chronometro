@@ -3351,6 +3351,7 @@ function renderOpeningScreen() {
       <div>
         <p class="kicker">Daily route puzzle</p>
         <h2>Choose your game</h2>
+        <p class="opening-explainer">Build the fastest route from departure to destination. Choose a line, direction, and stop; your time includes rides, expected waits, and transfers.</p>
       </div>
       <label class="setup-field">
         <span>City</span>
@@ -3360,11 +3361,11 @@ function renderOpeningScreen() {
         <legend>Mode</legend>
         <label class="mode-option">
           <input type="radio" name="gameMode" value="easy"${preferredMode === "easy" ? " checked" : ""}>
-          <span><strong>Easy</strong><small>Shows available connections at each stop.</small></span>
+          <span><strong>Easy</strong><small>Shows connections at each stop.</small></span>
         </label>
         <label class="mode-option">
           <input type="radio" name="gameMode" value="hard"${preferredMode === "hard" ? " checked" : ""}>
-          <span><strong>Hard</strong><small>Connections and walking transfers are revealed only after you exit.</small></span>
+          <span><strong>Hard</strong><small>Hides connections until you exit.</small></span>
         </label>
       </fieldset>
       <div class="toolbar">
@@ -3498,7 +3499,7 @@ async function loadPuzzleSet(today = cityDateString()) {
 }
 
 function showLoadingState() {
-  $("#game").innerHTML = `<section class="summary"><p class="muted">Loading today's route...</p></section>`;
+  $("#game").innerHTML = `<section class="summary"><p class="muted" role="status">Loading today's route...</p></section>`;
 }
 
 function updateCityChrome() {
