@@ -2265,7 +2265,12 @@ function orientationMapMarkup() {
         ${mapMarker(puzzle.end, "End", "end-marker")}
         ${current}
       </svg>
-      <figcaption class="map-attribution">Rivers © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></figcaption>
+      <figcaption class="map-attribution">
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" aria-label="River map attribution: OpenStreetMap contributors">
+          <span class="map-attribution-wide">Rivers © OpenStreetMap contributors</span>
+          <span class="map-attribution-compact" aria-hidden="true">© OpenStreetMap</span>
+        </a>
+      </figcaption>
     </figure>
   `;
 }
@@ -2275,8 +2280,8 @@ function toolbarMarkup({ backId = "", backLabel = "" } = {}) {
     <div class="toolbar">
       ${backId ? `<button class="action secondary" id="${backId}">${escapeHtml(backLabel)}</button>` : ""}
       ${!backId && state.undoHistory.length ? `<button class="action secondary" id="undoLeg" aria-label="Undo last leg">Undo</button>` : ""}
-      <button class="action secondary" id="resetRoute">Reset route</button>
-      <button class="action secondary" id="giveUp">Give up</button>
+      <button class="action quiet" id="resetRoute">Reset route</button>
+      <button class="action quiet danger-action" id="giveUp">Give up</button>
     </div>
   `;
 }
@@ -3334,9 +3339,17 @@ function hasCurrentProgress(mode) {
   }
 }
 
-function cityOptionsMarkup(selectedCity) {
-  return [...$("#citySelector").options].map((option) => `
-    <option value="${escapeHtml(option.value)}"${option.value === selectedCity ? " selected" : ""}>${escapeHtml(option.textContent)}</option>
+function cityChoicesMarkup(selectedCity) {
+  const cities = [
+    ["berlin", "Berlin"], ["boston", "Boston"], ["chicago", "Chicago"],
+    ["london", "London"], ["madrid", "Madrid"],
+    ["paris", "Paris"], ["washington-dc", "Washington, DC"],
+  ];
+  return cities.map(([id, name]) => `
+    <label class="city-option">
+      <input type="radio" name="gameCity" value="${id}"${id === selectedCity ? " checked" : ""}>
+      <span>${escapeHtml(name)}</span>
+    </label>
   `).join("");
 }
 
@@ -3349,39 +3362,47 @@ function renderOpeningScreen() {
   $("#game").innerHTML = `
     <section class="summary opening-screen">
       <div>
-        <p class="kicker">Daily route puzzle</p>
-        <h2>Choose your game</h2>
+        <h2>Choose game</h2>
         <p class="opening-explainer">Build the fastest route from departure to destination. Choose a line, direction, and stop; your time includes rides, expected waits, and transfers.</p>
       </div>
-      <label class="setup-field">
-        <span>City</span>
-        <select id="openingCity">${cityOptionsMarkup(CITY_ID)}</select>
-      </label>
+      <fieldset class="city-picker-grid">
+        <legend>City</legend>
+        <div class="city-options">${cityChoicesMarkup(CITY_ID)}</div>
+      </fieldset>
       <fieldset class="mode-picker">
-        <legend>Mode</legend>
+        <legend>Difficulty</legend>
+        <div class="mode-options">
         <label class="mode-option">
           <input type="radio" name="gameMode" value="easy"${preferredMode === "easy" ? " checked" : ""}>
-          <span><strong>Easy</strong><small>Shows connections at each stop.</small></span>
+          <span>Easy</span>
         </label>
         <label class="mode-option">
           <input type="radio" name="gameMode" value="hard"${preferredMode === "hard" ? " checked" : ""}>
-          <span><strong>Hard</strong><small>Hides connections until you exit.</small></span>
+          <span>Hard</span>
         </label>
+        </div>
+        <p class="mode-description" id="modeDescription"></p>
       </fieldset>
       <div class="toolbar">
-        <button class="action" id="beginGame">${hasCurrentProgress(preferredMode) ? "Resume" : "Start"}</button>
+        <button class="action" id="beginGame"></button>
       </div>
     </section>
   `;
   const refreshButton = () => {
-    const selectedCity = $("#openingCity").value;
+    const selectedCity = document.querySelector('input[name="gameCity"]:checked').value;
     const selectedMode = document.querySelector('input[name="gameMode"]:checked').value;
-    $("#beginGame").textContent = selectedCity === CITY_ID && hasCurrentProgress(selectedMode) ? "Resume" : "Start";
+    const cityName = document.querySelector('input[name="gameCity"]:checked + span').textContent;
+    const verb = selectedCity === CITY_ID && hasCurrentProgress(selectedMode) ? "Resume" : "Start";
+    $("#beginGame").textContent = `${verb} ${cityName} — ${selectedMode === "hard" ? "Hard" : "Easy"}`;
+    $("#modeDescription").textContent = selectedMode === "hard"
+      ? "Connections stay hidden until you exit."
+      : "Connections are shown at each stop.";
   };
-  $("#openingCity").addEventListener("change", refreshButton);
+  document.querySelectorAll('input[name="gameCity"]').forEach((input) => input.addEventListener("change", refreshButton));
   document.querySelectorAll('input[name="gameMode"]').forEach((input) => input.addEventListener("change", refreshButton));
+  refreshButton();
   $("#beginGame").addEventListener("click", () => {
-    const cityId = $("#openingCity").value;
+    const cityId = document.querySelector('input[name="gameCity"]:checked').value;
     const mode = document.querySelector('input[name="gameMode"]:checked').value;
     try { localStorage.setItem(MODE_PREFERENCE_KEY, mode); } catch { /* Preferences are optional. */ }
     if (cityId !== CITY_ID) {
@@ -3394,6 +3415,7 @@ function renderOpeningScreen() {
       return;
     }
     state.mode = mode;
+    $("#currentGameLabel").textContent = `${state.data.metadata.city.name} · ${mode === "hard" ? "Hard" : "Easy"}`;
     const url = new URL(window.location.href);
     url.searchParams.set("mode", mode);
     window.history.replaceState({}, "", url);
@@ -3504,8 +3526,8 @@ function showLoadingState() {
 
 function updateCityChrome() {
   const city = state.data.metadata.city;
-  $("#citySelector").value = CITY_ID;
   $("#cityKicker").textContent = "Daily route puzzle";
+  $("#currentGameLabel").textContent = `${city.name} · ${state.mode === "hard" ? "Hard" : "Easy"}`;
   document.title = `Chronométro — ${city.name}`;
   document.documentElement.dataset.city = CITY_ID;
   document.querySelectorAll(".site-footer nav a").forEach((link) => {
@@ -3516,22 +3538,13 @@ function updateCityChrome() {
   });
 }
 
-function bindCitySelector() {
-  $("#citySelector").value = CITY_ID;
-  $("#citySelector").addEventListener("change", (event) => {
-    const url = new URL(window.location.href);
-    if (event.target.value === "paris") url.searchParams.delete("city");
-    else url.searchParams.set("city", event.target.value);
-    url.searchParams.set("mode", state.mode);
-    window.location.assign(url);
-  });
-}
-
 async function init() {
   if (CITY_ID === "boston") new Image().src = BOSTON_BASEMAP_URL;
   showLoadingState();
-  bindCitySelector();
   $("#homeButton").addEventListener("click", () => {
+    if (state.data) renderOpeningScreen();
+  });
+  $("#gameSwitcher").addEventListener("click", () => {
     if (state.data) renderOpeningScreen();
   });
   const [network, puzzleSet, riverData] = await Promise.all([
@@ -3542,6 +3555,7 @@ async function init() {
   state.data = network;
   state.rivers = riverData?.rivers || [];
   if (!state.data) throw new Error("Network load failed");
+  state.mode = selectedModePreference();
   configureCityMap();
   updateCityChrome();
   state.daily = puzzleSet.puzzles;

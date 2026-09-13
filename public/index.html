@@ -6,7 +6,7 @@
     <meta name="description" content="A daily transit route puzzle. Plan the fastest route from one station to another" />
     <title>Chronométro</title>
     <link rel="icon" href="./favicon.svg?v=20260818" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=20260911-type-polish" />
+    <link rel="stylesheet" href="./styles.css?v=20260913-desktop-fit" />
   </head>
   <body>
     <a class="skip-link" href="#game">Skip to game</a>
@@ -20,18 +20,11 @@
           <p class="objective">Plan the fastest route from one station to another</p>
         </div>
         <div class="date-lockup">
-          <label class="city-picker">
-            <span>Choose city</span>
-            <select id="citySelector" aria-label="Choose puzzle city">
-              <option value="berlin">Berlin</option>
-              <option value="boston">Boston</option>
-              <option value="chicago">Chicago</option>
-              <option value="london">London</option>
-              <option value="madrid">Madrid</option>
-              <option value="paris">Paris</option>
-              <option value="washington-dc">Washington, DC</option>
-            </select>
-          </label>
+          <button class="game-switcher" id="gameSwitcher" type="button" aria-label="Change game">
+            <span>Playing</span>
+            <strong id="currentGameLabel">Paris · Easy</strong>
+            <em>Change</em>
+          </button>
           <span id="todayLabel"></span>
           <strong id="roundLabel">1 / 5</strong>
         </div>
@@ -49,6 +42,6 @@
       </footer>
     </main>
 
-    <script src="./app.js?v=20260907-walk-transfer-fix"></script>
+    <script src="./app.js?v=20260913-game-switcher"></script>
   </body>
 </html>
