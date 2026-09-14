@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const cities = ["paris", "london", "chicago", "washington-dc", "boston", "berlin", "madrid"];
+const cities = ["paris", "london", "chicago", "washington-dc", "boston", "berlin", "madrid", "new-york"];
 const read = (file) => JSON.parse(fs.readFileSync(path.join(root, file), "utf8"));
 
 for (const city of cities) {

@@ -964,11 +964,11 @@ class Router:
         )
         if route_pair is not None:
             return route_pair
-        if from_station == to_station:
-            return self.fallback_transfer(from_mode, to_mode)
         explicit = self.transfers.get(from_station, {}).get(to_station)
         if explicit is not None:
             return explicit
+        if from_station == to_station:
+            return self.fallback_transfer(from_mode, to_mode)
         return None
 
     def _add_edge(self, left: str, right: str, weight: int) -> None:
@@ -1688,8 +1688,12 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
         SOURCE_ADAPTER.augment_transfers(all_transfers, stations)
     transfers, excluded_transfers = filter_walking_transfers(all_transfers)
     canonical_station_ids, station_equivalents = build_station_equivalents(stations, transfers)
+    if hasattr(SOURCE_ADAPTER, "station_equivalence_groups"):
+        canonical_station_ids, station_equivalents = SOURCE_ADAPTER.station_equivalence_groups(
+            ROOT, CITY_CONFIG, stations
+        )
     for station_id, station in stations.items():
-        station["complexId"] = canonical_station_ids.get(station_id, station_id)
+        station.setdefault("complexId", canonical_station_ids.get(station_id, station_id))
 
     used_routes = sorted({direction["routeId"] for direction in directions.values()})
     routes = {route_id: routes[route_id] for route_id in used_routes}
@@ -1716,6 +1720,10 @@ def build_network() -> tuple[dict, Router, list[str], dict[str, int]]:
         station_id
         for station_id, station in stations.items()
         if station.get("services") and is_puzzle_endpoint(station)
+        and (
+            not CITY_CONFIG["network"].get("canonicalEndpointsOnly", False)
+            or canonical_station_ids.get(station_id, station_id) == station_id
+        )
     )
     total_ordered_pairs = sum(
         1
@@ -1782,7 +1790,12 @@ def assemble_normalized_network(source: dict) -> tuple[dict, Router, list[str], 
         canonical_station_ids,
     )
     endpoint_ids = sorted(
-        station_id for station_id, station in stations.items() if station.get("services") and is_puzzle_endpoint(station)
+        station_id for station_id, station in stations.items()
+        if station.get("services") and is_puzzle_endpoint(station)
+        and (
+            not CITY_CONFIG["network"].get("canonicalEndpointsOnly", False)
+            or canonical_station_ids.get(station_id, station_id) == station_id
+        )
     )
     total_ordered_pairs = sum(
         1
@@ -2177,8 +2190,15 @@ def load_all_pairs() -> tuple[list[dict], Counter] | None:
     # does not. Never allow an old bounding-box pool to bypass the current rule.
     network = json.loads(NETWORK_OUT.read_text(encoding="utf-8"))
     stations = network["stations"]
-    eligible = {sid for sid, station in stations.items()
-                if station.get("services") and is_puzzle_endpoint(station)}
+    canonical_station_ids = network.get("canonicalStationIds", {})
+    eligible = {
+        sid for sid, station in stations.items()
+        if station.get("services") and is_puzzle_endpoint(station)
+        and (
+            not CITY_CONFIG["network"].get("canonicalEndpointsOnly", False)
+            or canonical_station_ids.get(sid, sid) == sid
+        )
+    }
     cached_endpoints = {pair[key] for pair in pairs for key in ("start", "end")}
     if eligible - cached_endpoints:
         log("candidate cache is missing eligible endpoints; rebuilding")
@@ -2198,7 +2218,15 @@ def load_network_summary() -> dict[str, int]:
         return {}
     data = json.loads(NETWORK_OUT.read_text(encoding="utf-8"))
     stations = data.get("stations", {})
-    endpoint_count = sum(1 for station in stations.values() if station.get("services") and is_puzzle_endpoint(station))
+    canonical_station_ids = data.get("canonicalStationIds", {})
+    endpoint_count = sum(
+        1 for sid, station in stations.items()
+        if station.get("services") and is_puzzle_endpoint(station)
+        and (
+            not CITY_CONFIG["network"].get("canonicalEndpointsOnly", False)
+            or canonical_station_ids.get(sid, sid) == sid
+        )
+    )
     return {
         "selectedRouteCount": len(data.get("routes", {})),
         "directionCount": len(data.get("directions", {})),

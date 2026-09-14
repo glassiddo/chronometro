@@ -6,6 +6,9 @@ gouv_boston_gtfs-export/
 gouv_berlin_vbb_gtfs-export/
 gouv_madrid_crtm_gtfs-export/
 gouv_madrid_crtm_gtfs-export.zip
+gouv_new_york_mta_gtfs-export/
+gouv_new_york_basemap-export/
+gtfs_subway.zip
 gouv_berlin_vbb_gtfs-archive-*/
 vbb-gtfs-*.zip
 scripts/__pycache__/

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "id": "new-york",
+  "name": "New York City",
+  "gameTitle": "Chronométro",
+  "networkTitle": "New York City Subway network",
+  "timezone": "America/New_York",
+  "locale": "en-US",
+  "source": {
+    "type": "gtfs",
+    "directory": "gouv_new_york_mta_gtfs-export",
+    "adapter": "new_york",
+    "publisher": "MTA New York City Transit static subway GTFS",
+    "feedUrl": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip",
+    "downloadDate": "2026-09-13",
+    "representativeServiceDate": "2026-09-15",
+    "filterTripsToRepresentativeServices": true,
+    "fallbackVersion": "20260826-X-long-term-supplement-trip-ids",
+    "fallbackValidFrom": "2026-05-26",
+    "fallbackValidTo": "2026-10-31"
+  },
+  "attribution": {
+    "display": "Schedule data provided by MTA New York City Transit",
+    "disclaimer": "Schedule data provided by MTA New York City Transit. Chronométro is independently made and is not affiliated with, sponsored by, or endorsed by the MTA. Static scheduled data only; no live arrivals, alerts, or real-time APIs."
+  },
+  "modes": {
+    "subway": {"label": "Subway", "defaultWaitSeconds": 240, "maximumWaitSeconds": 900}
+  },
+  "timing": {
+    "peakStartSeconds": 25200,
+    "peakEndSeconds": 36000,
+    "minimumWaitSeconds": 30,
+    "transferDefaultsSeconds": {"same_mode": 180, "fallback": 180},
+    "stationEquivalenceDistanceMetres": 0,
+    "stationEquivalenceTransferSeconds": 0
+  },
+  "network": {
+    "maximumDirectionsPerRoute": 32,
+    "shortTurnModes": [],
+    "sharedServiceGroups": [
+      {"routeIds": ["6", "6X"]},
+      {"routeIds": ["7", "7X"]},
+      {"routeIds": ["F", "FX"]},
+      {"routeIds": ["J", "Z"]}
+    ],
+    "routeContinuations": [],
+    "canonicalEndpointsOnly": true,
+    "walkingTransfers": {"allowAll": true}
+  },
+  "puzzles": {
+    "startDate": "2026-09-14",
+    "days": 48,
+    "dailyCount": 5,
+    "exampleCount": 100,
+    "minimumRouteDistanceMetres": 2500,
+    "minimumEndpointDistanceMetres": 2000,
+    "endpointModes": ["subway"],
+    "boundedEndpointModes": [],
+    "bounds": {"minLat": 40.49, "maxLat": 40.92, "minLon": -74.26, "maxLon": -73.68},
+    "excludeSameComplexEndpoints": true,
+    "requireInterchangeEndpoints": false,
+    "seedNamespace": "chronometro-new-york-subway-v1"
+  },
+  "paths": {
+    "network": "public/data/new-york/network.json",
+    "allPairs": "public/data/new-york/generated/all-pairs.json",
+    "example": "public/data/new-york/example/puzzles.json",
+    "daily": "public/data/new-york/daily"
+  }
+}

@@ -68,6 +68,15 @@ The normal network combines VBB scheduled patterns with the official regular S-B
 
 See [Madrid data and timing assumptions](docs/madrid-data.md).
 
+### New York City
+
+- Subway routes 1–7, A–G, J/Z, L, M, N–W, and the 42 St, Franklin Av, and Rockaway shuttles
+- 424 official MTA station complexes are eligible puzzle endpoints
+- Excludes Staten Island Railway, PATH, LIRR, Metro-North, buses, and ferries
+- Daily puzzles from 14 September through 31 October 2026
+
+The fixed network uses weekday trips beginning from 07:00–10:00. Express, local, branch, and shuttle stopping patterns remain distinct. Official MTA station-complex records unify puzzle endpoints while GTFS transfer times still apply to changes made during a route.
+
 ## Data sources
 
 ### Paris
@@ -130,6 +139,10 @@ Berlin uses the official VBB static GTFS package:
 
 VBB publishes all Berlin and Brandenburg transport in one feed. The adapter accepts BVG agency `796` / type `400` / U1–U9 and S-Bahn Berlin agency `1` / type `109` / the 16 regular S-Bahn labels. Public S-Bahn lines are normalized across timetable-specific route IDs. A reviewed service manifest excludes diversions and records independent peak trains and alternative branches. Stations normalize through GTFS `parent_station`; four documented interchanges between distinct parents use explicit five-minute walks. S-Bahn waits use the official regular service frequencies, combined only for trains that serve the entire chosen ride. Berlin’s search uses these costs before selecting the optimum.
 
+### New York City
+
+New York City uses MTA New York City Transit's official static subway GTFS, downloaded 13 September 2026. The saved feed is version `20260826-X-long-term-supplement-trip-ids`, valid 26 May through 31 October 2026. The official MTA Subway Stations and Complexes dataset supplies passenger complex membership. Weekday trips beginning from 07:00–10:00 supply the normal morning topology, runtimes, and expected waits. Positive `transfers.txt` times take precedence over the three-minute missing-data fallback. No realtime MTA APIs are used.
+
 No city uses live service status, disruptions, closures, fares, accessibility, crowding, or real-time departure information.
 
 ## Repository layout
@@ -142,6 +155,7 @@ No city uses live service status, disruptions, closures, fares, accessibility, c
 - `public/data/boston/` — Boston network, examples, and daily puzzles
 - `public/data/berlin/` — Berlin network, examples, and daily puzzles from 9 September through October 2026
 - `public/data/madrid/` — Madrid network, examples, and daily puzzles through December 2026
+- `public/data/new-york/` — New York City Subway network, examples, and daily puzzles through 31 October 2026
 - `config/cities/` — city coverage, timing assumptions, output paths, and attribution
 - `scripts/build_city.py` — city-neutral build entry point
 - `scripts/build_data.py` — shared normalization, routing, timing, and puzzle generation
@@ -164,6 +178,7 @@ python scripts/build_city.py washington-dc --mode release
 python scripts/build_city.py boston --mode release
 python scripts/build_city.py berlin --mode release
 python scripts/build_city.py madrid --mode release
+python scripts/build_city.py new-york --mode release
 ```
 
 Useful incremental build modes include `network`, `all-pairs`, `example`, and `daily-range`.
@@ -189,6 +204,9 @@ python scripts/verify_berlin_network.py
 python scripts/validate_city_schema.py madrid
 python scripts/verify_timing_model.py madrid
 python scripts/verify_madrid_network.py
+python scripts/validate_city_schema.py new-york
+python scripts/verify_timing_model.py new-york
+python scripts/verify_new_york_network.py
 node scripts/verify_berlin_frontend.js
 python scripts/check_auteuil_route.py
 ```
@@ -208,6 +226,8 @@ To refresh Washington, register for a WMATA developer key, download and extract 
 To refresh Boston, download and extract `https://cdn.mbta.com/MBTA_GTFS.zip` into ignored `gouv_boston_gtfs-export/`. The committed snapshot was downloaded 31 August 2026: feed `mbta-ma-us`, version `Fall 2026, 2026-08-28T13:45:01+00:00, version D`, valid 21 August–12 December 2026. It includes Red, Orange, Blue, Green B/C/D/E, and Mattapan only. Silver Line is excluded because it is bus service despite its rapid-transit branding; all other buses, shuttles, Commuter Rail, ferries, CapeFLYER, Amtrak, and non-MBTA operators are excluded. Platforms collapse only through explicit parents. The only distinct-station walk is the documented Winter Street Concourse, modeled as five minutes between Park Street and Downtown Crossing. Waits use half the median 07:00–10:00 scheduled gap for the representative weekday, separately by complete pattern. Later puzzles remain a fixed snapshot after feed expiry. See `docs/boston-data.md` for reproducibility details.
 
 To refresh Berlin, download and extract VBB's official GTFS package into the ignored `gouv_berlin_vbb_gtfs-export/` directory and VBB's 2021 archive into `gouv_berlin_vbb_gtfs-archive-2021/`, then run the Berlin release and verification commands. Review route labels, termini, station count, temporary services, archive compatibility, and calendar validity before accepting a refreshed bundle.
+
+To refresh New York City, download MTA New York City Transit's static subway GTFS from `https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip` and extract it into the ignored `gouv_new_york_mta_gtfs-export/` directory. Save the official MTA Subway Stations and Complexes CSV as `station_complexes.csv` in the same directory. Basemap source geometry belongs in the ignored `gouv_new_york_basemap-export/` directory: `borough-boundaries.geojson` comes from NYC Planning's Borough Boundaries dataset and `surrounding-land.geojson` from US Census cartographic boundaries. Run `python scripts/build_new_york_basemap.py`, followed by the New York release and verification commands. Review the feed version, representative weekday patterns, rare supplemental trips, terminals, and transfer times before accepting a refreshed bundle.
 
 ## Timing limitations
 

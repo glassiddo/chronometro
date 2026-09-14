@@ -1,4 +1,4 @@
-const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc", "boston", "berlin", "madrid"]);
+const SUPPORTED_CITY_IDS = new Set(["paris", "london", "chicago", "washington-dc", "boston", "berlin", "madrid", "new-york"]);
 const requestedCityId = new URLSearchParams(window.location.search).get("city");
 const CITY_ID = SUPPORTED_CITY_IDS.has(requestedCityId) ? requestedCityId : "paris";
 const CITY_TIMEZONES = {
@@ -9,10 +9,11 @@ const CITY_TIMEZONES = {
   boston: "America/New_York",
   berlin: "Europe/Berlin",
   madrid: "Europe/Madrid",
+  "new-york": "America/New_York",
 };
 const CITY_DATA_URL = `./data/${CITY_ID}`;
 const NETWORK_URL = `${CITY_DATA_URL}/network.json`;
-const RIVERS_URL = `${CITY_DATA_URL}/rivers.json?map=20260903-linked`;
+const RIVERS_URL = `${CITY_DATA_URL}/rivers.json?map=20260914-water`;
 const DAILY_INDEX_URL = `${CITY_DATA_URL}/daily/index.json`;
 const DAILY_BASE_URL = `${CITY_DATA_URL}/daily`;
 const EXAMPLE_URL = `${CITY_DATA_URL}/example/puzzles.json`;
@@ -23,6 +24,8 @@ const DATA_REVISION = CITY_ID === "paris"
   : CITY_ID === "london" ? "20260909-timing-parity"
   : CITY_ID === "berlin" ? "20260909-timing-parity" : CITY_ID === "madrid" ? "20260906-madrid" : "20260909-timing-parity";
 const BOSTON_BASEMAP_URL = "./data/boston/coastline.svg?v=20260903";
+const NEW_YORK_BASEMAP_URL = "./data/new-york/coastline.svg?v=20260914-water";
+const NEW_YORK_NETWORK_MAP_URL = "./data/new-york/network-context.svg?v=20260914-clean";
 const MODE_PREFERENCE_KEY = "chronometro:mode";
 
 const state = {
@@ -227,7 +230,9 @@ function formatLegBreakdown(leg) {
   const parts = [
     Number.isFinite(totalSec) && totalSec > 0 ? formatPanelTime(totalSec) : "",
     Number.isFinite(leg.rideSec) && leg.rideSec > 0 ? `${formatPanelTime(leg.rideSec)} ride` : "",
-    waitTransferSec > 0 ? `${formatPanelTime(waitTransferSec)} wait+transfer` : "",
+    waitTransferSec > 0
+      ? `${formatPanelTime(waitTransferSec)} ${leg.foldedWalkSec > 0 ? "wait+transfer+walk" : "wait+transfer"}`
+      : "",
     usesInterchangeablePatterns(leg) ? `includes all suitable ${escapeHtml(route(leg.routeId).label)} trains` : "",
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : "";
@@ -285,12 +290,14 @@ function lineChoiceMarker(routeId) {
 
 function routeDisplayName(r) {
   const label = r?.label || "";
+  if (CITY_ID === "new-york" && ["GS", "FS", "H"].includes(r?.id)) return "S";
   if (CITY_ID !== "london") return label;
   if (label === "Hammersmith & City") return "H&C";
   return label.replace(/\s+line$/i, "");
 }
 
 function routeChoiceLabel(r) {
+  if (CITY_ID === "new-york") return `Line ${routeDisplayName(r)}`;
   if (["london", "chicago", "washington-dc", "boston", "berlin"].includes(CITY_ID)) return routeDisplayName(r);
   return `${modeName(r.mode)} ${r.label}`;
 }
@@ -427,7 +434,8 @@ function stationInterchangeRouteIds(stationId) {
 }
 
 function stationLineBadges(stationId) {
-  const badges = stationLineIds(stationId).map(lineBadge).join("");
+  const routeIds = CITY_ID === "new-york" ? uniqueRouteDisplayIds(stationLineIds(stationId)) : stationLineIds(stationId);
+  const badges = routeIds.map(lineBadge).join("");
   if (CITY_ID !== "london") return badges ? `<span class="station-lines" aria-label="Connecting lines">${badges}</span>` : "";
   const allRouteIds = new Set([...stationLineIds(stationId), ...stationInterchangeRouteIds(stationId)]);
   const sortedRouteIds = [...allRouteIds].sort((a, b) => compareText(routeDisplayName(route(a)), routeDisplayName(route(b))));
@@ -2099,6 +2107,7 @@ function configureCityMap() {
   const isBoston = CITY_ID === "boston";
   const isBerlin = CITY_ID === "berlin";
   const isMadrid = CITY_ID === "madrid";
+  const isNewYork = CITY_ID === "new-york";
   CITY_MAP = {
     width: 320,
     height: 220,
@@ -2112,11 +2121,14 @@ function configureCityMap() {
           ? { minLat: 52.28, maxLat: 52.78, minLon: 12.98, maxLon: 13.96 }
         : isMadrid
           ? { minLat: 40.27, maxLat: 40.57, minLon: -3.98, maxLon: -3.45 }
+        : isNewYork
+          ? { minLat: 40.49, maxLat: 40.94, minLon: -74.26, maxLon: -73.68 }
        : { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
     outline: [],
+    landmasses: [],
     parks: [],
     airport: null,
-    basemap: isBoston ? BOSTON_BASEMAP_URL : null,
+    basemap: isBoston ? BOSTON_BASEMAP_URL : isNewYork ? NEW_YORK_BASEMAP_URL : null,
     waterbody: isBoston
       ? []
       : isChicago
@@ -2202,6 +2214,7 @@ function mapMarker(stationId, label, className) {
 }
 
 function networkContextMapMarkup() {
+  if (CITY_ID === "new-york") return mapImageMarkup(NEW_YORK_NETWORK_MAP_URL);
   const seen = new Set();
   const segments = [];
   Object.values(state.data.directions).forEach((dir) => {
@@ -2222,13 +2235,17 @@ function networkContextMapMarkup() {
   return `<path class="map-network-context map-network-context--${CITY_ID}" d="${segments.join(" ")}"></path>`;
 }
 
-function basemapMarkup() {
-  if (!CITY_MAP.basemap) return "";
+function mapImageMarkup(url) {
+  if (!url) return "";
   const bounds = CITY_MAP.bounds;
   const view = CITY_MAP.viewBounds || bounds;
   const scale = (bounds.maxLon - bounds.minLon) / (view.maxLon - view.minLon);
   const origin = mapPoint({ lon: bounds.minLon, lat: bounds.maxLat }, false);
-  return `<image href="${CITY_MAP.basemap}" x="${origin.x - 12 * scale}" y="${origin.y - 12 * scale}" width="${320 * scale}" height="${220 * scale}"></image>`;
+  return `<image href="${url}" x="${origin.x - 12 * scale}" y="${origin.y - 12 * scale}" width="${320 * scale}" height="${220 * scale}"></image>`;
+}
+
+function basemapMarkup() {
+  return mapImageMarkup(CITY_MAP.basemap);
 }
 
 function riverMapMarkup() {
@@ -2254,6 +2271,7 @@ function orientationMapMarkup() {
         <desc id="orientationMapDesc">A simplified city map with the start station and destination station.</desc>
         <rect class="map-bg" width="${CITY_MAP.width}" height="${CITY_MAP.height}" rx="6"></rect>
         ${basemapMarkup()}
+        ${(CITY_MAP.landmasses || []).map((land) => `<path class="map-land" d="${mapCurvePath(land, true)}"></path>`).join("")}
         ${CITY_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
         ${CITY_MAP.airport ? `<path class="map-airport" d="${mapCurvePath(CITY_MAP.airport, true)}"></path>` : ""}
         ${CITY_MAP.outline.length ? `<path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>` : ""}
@@ -2266,10 +2284,12 @@ function orientationMapMarkup() {
         ${current}
       </svg>
       <figcaption class="map-attribution">
-        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" aria-label="River map attribution: OpenStreetMap contributors">
-          <span class="map-attribution-wide">Rivers © OpenStreetMap contributors</span>
-          <span class="map-attribution-compact" aria-hidden="true">© OpenStreetMap</span>
-        </a>
+        ${CITY_ID === "new-york"
+          ? `<span><a href="https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne" target="_blank" rel="noopener">NYC DCP</a> + <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">US Census</a></span>`
+          : `<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" aria-label="River map attribution: OpenStreetMap contributors">
+              <span class="map-attribution-wide">Rivers © OpenStreetMap contributors</span>
+              <span class="map-attribution-compact" aria-hidden="true">© OpenStreetMap</span>
+            </a>`}
       </figcaption>
     </figure>
   `;
@@ -2277,10 +2297,10 @@ function orientationMapMarkup() {
 
 function toolbarMarkup({ backId = "", backLabel = "" } = {}) {
   return `
-    <div class="toolbar">
-      ${backId ? `<button class="action secondary" id="${backId}">${escapeHtml(backLabel)}</button>` : ""}
+    <div class="toolbar route-controls">
+      ${backId ? `<button class="action secondary" id="${backId}">← ${escapeHtml(backLabel)}</button>` : ""}
       ${!backId && state.undoHistory.length ? `<button class="action secondary" id="undoLeg" aria-label="Undo last leg">Undo</button>` : ""}
-      <button class="action quiet" id="resetRoute">Reset route</button>
+      <button class="action quiet" id="resetRoute">Reset</button>
       <button class="action quiet danger-action" id="giveUp">Give up</button>
     </div>
   `;
@@ -2334,6 +2354,16 @@ function boardShell(content, { showRouteSummary = true } = {}) {
   `;
   focusGameHeading();
   saveProgress();
+}
+
+function uniqueRouteDisplayIds(routeIds) {
+  const seen = new Set();
+  return routeIds.filter((routeId) => {
+    const label = routeDisplayName(route(routeId));
+    if (seen.has(label)) return false;
+    seen.add(label);
+    return true;
+  });
 }
 
 function focusGameHeading() {
@@ -2569,7 +2599,8 @@ function boardableRouteIds(stationId) {
 }
 
 function walkLineBadges(stationId) {
-  const badges = boardableRouteIds(stationId).map(lineBadge).join("");
+  const routeIds = boardableRouteIds(stationId);
+  const badges = (CITY_ID === "new-york" ? uniqueRouteDisplayIds(routeIds) : routeIds).map(lineBadge).join("");
   return badges ? `<span class="walk-lines" aria-label="Lines at ${escapeHtml(station(stationId).name)}">${badges}</span>` : "";
 }
 
@@ -2606,13 +2637,16 @@ function boardingOptions() {
     const services = station(location.stationId).services || {};
     Object.keys(services).forEach((routeId) => {
       if (!route(routeId)) return;
+      const r = route(routeId);
       const usable = boardableDirectionIds(location.stationId, routeId);
       if (!usable.length) return;
       const key = `${location.stationId}:${routeId}`;
       if (seen.has(key)) return;
       seen.add(key);
-      if (!byRoute.has(routeId)) byRoute.set(routeId, { routeId, boards: [] });
-      byRoute.get(routeId).boards.push({
+      const groupKey = CITY_ID === "new-york" ? routeDisplayName(r) : routeId;
+      if (!byRoute.has(groupKey)) byRoute.set(groupKey, { routeId, boards: [] });
+      byRoute.get(groupKey).boards.push({
+        routeId,
         boardStation: location.stationId,
         walkSec: location.walkSec,
         directionIds: usable,
@@ -2719,7 +2753,7 @@ function renderDirectionStep() {
   selected.boards.forEach((board) => {
     board.directionIds.forEach((dirId) => {
       const label = directionGroupLabel(direction(dirId).label);
-      const candidate = { dirId, boardStation: board.boardStation, walkSec: board.walkSec, label };
+      const candidate = { routeId: board.routeId || selected.routeId, dirId, boardStation: board.boardStation, walkSec: board.walkSec, label };
       const key = directionOptionKey(candidate);
       if (!groupedDirections.has(key)) groupedDirections.set(key, { candidates: [] });
       groupedDirections.get(key).candidates.push(candidate);
@@ -2757,6 +2791,7 @@ function renderDirectionStep() {
     button.addEventListener("click", () => {
       const option = directionOptions[Number(button.dataset.directionIndex)];
       state.selected.directionCandidates = option.candidates;
+      state.selected.routeId = option.candidates[0].routeId;
       state.selected.directionId = option.candidates[0].dirId;
       state.selected.boardStation = option.candidates[0].boardStation;
       state.selected.directionLabel = option.label;
@@ -2796,7 +2831,7 @@ function renderAlightStep() {
       const choiceKey = CITY_ID === "london" ? stationDisplayName(stationId) : stationId;
       const choiceSec = runSec + candidate.walkSec + combinedWaitSeconds(
         candidate.dirId,
-        selected.routeId,
+        candidate.routeId,
         candidate.boardStation,
         stationId,
       );
@@ -2817,8 +2852,11 @@ function renderAlightStep() {
     const services = station(stationId).services || {};
     const availableRouteIds = new Set(Object.keys(services));
     stationInterchangeRouteIds(stationId).forEach((routeId) => availableRouteIds.add(routeId));
-    const transferBadges = state.mode === "hard" ? "" : [...availableRouteIds]
-      .filter((routeId) => routeId !== selected.routeId && route(routeId))
+    const transferRouteIds = [...availableRouteIds]
+      .filter((routeId) => route(routeId) && (CITY_ID === "new-york"
+        ? routeDisplayName(route(routeId)) !== routeDisplayName(route(selected.routeId))
+        : routeId !== selected.routeId));
+    const transferBadges = state.mode === "hard" ? "" : (CITY_ID === "new-york" ? uniqueRouteDisplayIds(transferRouteIds) : transferRouteIds)
       .sort((a, b) => compareText(route(a).label, route(b).label))
       .map(lineBadge)
       .join("");
@@ -2841,7 +2879,7 @@ function renderAlightStep() {
       ${choices
         .map(
           (choice) => `
-            <button class="choice stop-choice${samePuzzleStation(choice.stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(choice.stationId)}" data-direction-id="${escapeHtml(choice.dirId)}" data-board-station="${escapeHtml(choice.boardStation)}">
+            <button class="choice stop-choice${samePuzzleStation(choice.stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(choice.stationId)}" data-route-id="${escapeHtml(choice.routeId)}" data-direction-id="${escapeHtml(choice.dirId)}" data-board-station="${escapeHtml(choice.boardStation)}">
               <span class="stop-node" aria-hidden="true"></span>
               <span class="stop-main">
                 <strong>${escapeHtml(stationDisplayName(choice.stationId))}</strong>
@@ -2883,6 +2921,7 @@ function renderAlightStep() {
   updateStopFilter();
   document.querySelectorAll("[data-alight]").forEach((button) => {
     button.addEventListener("click", () => {
+      state.selected.routeId = button.dataset.routeId;
       state.selected.directionId = button.dataset.directionId;
       state.selected.boardStation = button.dataset.boardStation;
       addLeg(button.dataset.alight);
@@ -2941,7 +2980,7 @@ function bestEquivalentDirectionCandidate(selected, toStation) {
     if (!Number.isFinite(runSec)) return;
     const waitSec = combinedWaitSeconds(
       candidate.dirId,
-      selected.routeId,
+      candidate.routeId || selected.routeId,
       candidate.boardStation,
       toStation,
     );
@@ -3034,6 +3073,7 @@ function addLeg(toStation) {
   const selected = state.selected;
   const bestCandidate = bestEquivalentDirectionCandidate(selected, toStation);
   if (bestCandidate) {
+    selected.routeId = bestCandidate.routeId || selected.routeId;
     selected.directionId = bestCandidate.dirId;
     selected.boardStation = bestCandidate.boardStation;
   }
@@ -3049,8 +3089,21 @@ function addLeg(toStation) {
     return;
   }
 
+  const internalTransfer = sameStation(state.currentStation, selected.boardStation)
+    && selected.boardStation !== state.currentStation
+    && !isFreeStartHubBoarding(selected.boardStation);
+  if (internalTransfer) {
+    const internalTransferSec = equivalentWalkSeconds(state.currentStation, selected.boardStation);
+    if (!Number.isFinite(internalTransferSec)) {
+      renderLineStep("There is no transfer link between those platforms in the feed.");
+      return;
+    }
+    timing.transferSec += internalTransferSec;
+    timing.elapsedSec += internalTransferSec;
+  }
+
   rememberMove();
-  if (selected.boardStation !== state.currentStation && !isFreeStartHubBoarding(selected.boardStation)) {
+  if (!internalTransfer && selected.boardStation !== state.currentStation && !isFreeStartHubBoarding(selected.boardStation)) {
     const walked = addWalkStep(selected.boardStation, selected.routeId, { renderAfter: false });
     if (!walked) {
       state.undoHistory.pop();
@@ -3098,18 +3151,26 @@ function scoreRoute(puzzle, totalSec) {
   return { score, label: "Slow route" };
 }
 
-function reviewVisibleSteps(steps) {
-  return steps.filter((step, index) => {
+function reviewVisibleSteps(steps, { foldWalks = false } = {}) {
+  const reviewed = steps.map((step) => ({ ...step }));
+  return reviewed.filter((step, index) => {
     if (stepType(step) !== "walk") return true;
-    const adjacentRides = [steps[index - 1], steps[index + 1]].filter(
+    const adjacentRides = [reviewed[index - 1], reviewed[index + 1]].filter(
       (candidate) => candidate && stepType(candidate) === "ride",
     );
-    return !adjacentRides.some((candidate) => route(candidate.routeId)?.mode === "elizabeth");
+    if (adjacentRides.some((candidate) => route(candidate.routeId)?.mode === "elizabeth")) return false;
+    if (!foldWalks || !sameStation(step.from, step.to) || stepType(reviewed[index + 1]) !== "ride") return true;
+    const nextRide = reviewed[index + 1];
+    const walkSec = Number.isFinite(step.transferSec) ? step.transferSec : step.elapsedSec || 0;
+    nextRide.transferSec = (nextRide.transferSec || 0) + walkSec;
+    nextRide.elapsedSec = (nextRide.elapsedSec || 0) + walkSec;
+    nextRide.foldedWalkSec = (nextRide.foldedWalkSec || 0) + walkSec;
+    return false;
   });
 }
 
-function routePanel(title, steps) {
-  const visibleSteps = reviewVisibleSteps(steps);
+function routePanel(title, steps, options = {}) {
+  const visibleSteps = reviewVisibleSteps(steps, options);
   return `
     <div class="route-panel">
       <h3>${escapeHtml(title)}</h3>
@@ -3122,7 +3183,7 @@ function routeComparisonMarkup(userSteps, optimalSteps) {
   return `
     <div class="comparison">
       ${routePanel("Your route", userSteps)}
-      ${routePanel("Fastest route", optimalSteps)}
+      ${routePanel("Fastest route", optimalSteps, { foldWalks: true })}
     </div>
     <div class="comparison-tabs" data-comparison-tabs>
       <div class="comparison-tablist" role="tablist" aria-label="Route comparison">
@@ -3133,7 +3194,7 @@ function routeComparisonMarkup(userSteps, optimalSteps) {
         ${routePanel("Your route", userSteps)}
       </div>
       <div class="comparison-tabpanel" data-route-panel="fastest" hidden>
-        ${routePanel("Fastest route", optimalSteps)}
+        ${routePanel("Fastest route", optimalSteps, { foldWalks: true })}
       </div>
     </div>
   `;
@@ -3342,7 +3403,7 @@ function hasCurrentProgress(mode) {
 function cityChoicesMarkup(selectedCity) {
   const cities = [
     ["berlin", "Berlin"], ["boston", "Boston"], ["chicago", "Chicago"],
-    ["london", "London"], ["madrid", "Madrid"],
+    ["london", "London"], ["madrid", "Madrid"], ["new-york", "New York City"],
     ["paris", "Paris"], ["washington-dc", "Washington, DC"],
   ];
   return cities.map(([id, name]) => `
@@ -3391,9 +3452,8 @@ function renderOpeningScreen() {
   const refreshButton = () => {
     const selectedCity = document.querySelector('input[name="gameCity"]:checked').value;
     const selectedMode = document.querySelector('input[name="gameMode"]:checked').value;
-    const cityName = document.querySelector('input[name="gameCity"]:checked + span').textContent;
     const verb = selectedCity === CITY_ID && hasCurrentProgress(selectedMode) ? "Resume" : "Start";
-    $("#beginGame").textContent = `${verb} ${cityName} — ${selectedMode === "hard" ? "Hard" : "Easy"}`;
+    $("#beginGame").textContent = verb;
     $("#modeDescription").textContent = selectedMode === "hard"
       ? "Connections stay hidden until you exit."
       : "Connections are shown at each stop.";
@@ -3540,6 +3600,8 @@ function updateCityChrome() {
 
 async function init() {
   if (CITY_ID === "boston") new Image().src = BOSTON_BASEMAP_URL;
+  if (CITY_ID === "new-york") new Image().src = NEW_YORK_BASEMAP_URL;
+  if (CITY_ID === "new-york") new Image().src = NEW_YORK_NETWORK_MAP_URL;
   showLoadingState();
   $("#homeButton").addEventListener("click", () => {
     if (state.data) renderOpeningScreen();
