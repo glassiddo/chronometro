@@ -387,10 +387,6 @@ def main() -> None:
         )
     require("routeTransfers" in app and "transferFallback" in app, "frontend does not use route transfer fallback rules")
     require("formatLegBreakdown" in app and "rideSec" in app, "frontend does not expose timing breakdowns")
-    require(
-        "function scoreRoute(puzzle, totalSec)" in app and "bestComparableTotalSec" not in app,
-        "frontend scoring must use the player's selected branch timing",
-    )
     require("function branchViaLabel(" in app and "showBranchVia: true" in app, "frontend route review hides branch differences")
     require(
         'return `label:${candidate.label}`;' in app

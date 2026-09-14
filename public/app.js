@@ -95,7 +95,7 @@ function restoreProgress() {
     SAVED_FIELDS.forEach((field) => { state[field] = p[field]; });
     normalizeWalkTimings();
     if (["result", "summary"].includes(state.stage) && state.results[state.puzzleIndex]) {
-      const scored = scoreRoute(currentPuzzle(), state.totalSec);
+      const scored = scoreRoute(currentPuzzle(), state.totalSec, state.steps);
       state.results[state.puzzleIndex] = {
         ...state.results[state.puzzleIndex],
         score: scored.score,
@@ -2773,11 +2773,13 @@ function renderDirectionStep() {
       ${directionOptions
         .map((option, index) => {
           const candidate = option.candidates[0];
+          const reachesDestination = state.mode === "easy"
+            && option.candidates.some((item) => directionCandidateReachesDestination(item, currentPuzzle().end));
           const directionLabel = candidate.boardStation === state.currentStation || isFreeStartHubBoarding(candidate.boardStation)
             ? ""
             : `${formatCompactTime(candidate.walkSec)} walk`;
           return `
-            <button class="choice" data-direction-index="${index}">
+            <button class="choice${reachesDestination ? " destination-choice" : ""}" data-direction-index="${index}">
               <strong>${escapeHtml(option.label)}</strong>
               ${directionLabel ? `<small>${directionLabel}</small>` : ""}
             </button>
@@ -2944,6 +2946,24 @@ function directionRideSpan(dir, fromStation, toStation) {
     }
   });
   return best;
+}
+
+function directionCandidateReachesDestination(candidate, destinationId) {
+  const candidateDir = direction(candidate.dirId);
+  const boardIndex = candidateDir?.stations.indexOf(candidate.boardStation) ?? -1;
+  if (boardIndex < 0) return false;
+  const stopIndex = candidateDir.circular
+    ? Math.min(candidateDir.stations.length, boardIndex + candidateDir.ringStationCount + 1)
+    : candidateDir.stations.length;
+  if (candidateDir.stations.slice(boardIndex + 1, stopIndex).some((stationId) => samePuzzleStation(stationId, destinationId))) {
+    return true;
+  }
+  const continuation = routeContinuation(candidate.dirId);
+  return Boolean(
+    continuation
+    && candidateDir.stations[candidateDir.stations.length - 1] === continuation.stationId
+    && direction(continuation.toDirectionId)?.stations.slice(1).some((stationId) => samePuzzleStation(stationId, destinationId)),
+  );
 }
 
 function runtimeBetween(dirId, fromStation, toStation) {
@@ -3132,9 +3152,41 @@ function addLeg(toStation) {
   }
 }
 
-function scoreRoute(puzzle, totalSec) {
+function fastestSamePathTiming(step) {
+  if (!direction(step.directionId)?.stations || !route(step.routeId)) return null;
+  const selectedPath = ridePathStationIds(step);
+  if (!selectedPath.length) return null;
+  const candidates = boardableDirectionIds(step.from, step.routeId)
+    .map((directionId) => {
+      const candidate = { ...step, directionId };
+      const candidatePath = ridePathStationIds(candidate);
+      if (candidatePath.length !== selectedPath.length
+        || candidatePath.some((stationId, index) => stationId !== selectedPath[index])) return null;
+      const rideSec = runtimeBetween(directionId, step.from, step.to);
+      const transferSec = Number(step.transferSec) || 0;
+      if (!Number.isFinite(rideSec) || !Number.isFinite(transferSec)) return null;
+      const waitSec = combinedWaitSeconds(directionId, step.routeId, step.from, step.to);
+      return rideSec + waitSec + transferSec;
+    })
+    .filter(Number.isFinite);
+  return candidates.length ? Math.min(...candidates) : null;
+}
+
+function bestSamePathTotalSec(steps, fallbackTotalSec) {
+  let totalSec = 0;
+  for (const step of steps) {
+    if (stepType(step) === "walk") {
+      totalSec += Number.isFinite(step.elapsedSec) ? step.elapsedSec : Number(step.transferSec) || 0;
+      continue;
+    }
+    totalSec += fastestSamePathTiming(step) ?? step.elapsedSec ?? 0;
+  }
+  return Number.isFinite(totalSec) && totalSec > 0 ? totalSec : fallbackTotalSec;
+}
+
+function scoreRoute(puzzle, totalSec, steps = []) {
   const optimal = puzzle.optimalRoute;
-  const comparableTotalSec = totalSec;
+  const comparableTotalSec = Math.min(totalSec, bestSamePathTotalSec(steps, totalSec));
   const perfect = Math.max(0, comparableTotalSec - optimal.totalSec) <= 1;
   if (perfect) return { score: 100, label: "Perfect" };
 
@@ -3239,7 +3291,7 @@ function precomputedSteps(routeInfo) {
 function renderResult() {
   state.stage = "result";
   const puzzle = currentPuzzle();
-  const scored = scoreRoute(puzzle, state.totalSec);
+  const scored = scoreRoute(puzzle, state.totalSec, state.steps);
   const optimal = puzzle.optimalRoute;
   const optimalSteps = precomputedSteps(optimal);
   state.results[state.puzzleIndex] = {
