@@ -398,10 +398,9 @@ def main() -> None:
         "frontend merged station lists are not sorted by journey time",
     )
     require(
-        "function reviewVisibleSteps(steps, { foldWalks = false } = {})" in app
-        and 'routePanel("Fastest route", optimalSteps, { foldWalks: true })' in app
-        and "transfer+walk" in app,
-        "fastest-route walks are not folded into transfer timing",
+        "function reviewVisibleSteps(steps)" in app
+        and 'routePanel("Fastest route", optimalSteps)' in app,
+        "fastest-route walks are not preserved as explicit steps",
     )
     require(
         "function addWalkStep(" in app and 'type: "walk"' in app and 'stepType(step) === "walk"' in app,

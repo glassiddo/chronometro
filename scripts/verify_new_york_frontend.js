@@ -15,7 +15,7 @@ function check(condition, message) {
 
 const context = vm.createContext({
   URLSearchParams,
-  window: { location: { search: "?city=new-york" } },
+  window: { location: { search: "?city=new-york&mode=hard" } },
   console,
 });
 vm.runInContext(app.slice(0, app.lastIndexOf("init().catch(")), context);
@@ -25,30 +25,87 @@ context.testData = {
   interchangeableDirectionRoutes: [],
   directions: {},
   routes: {
+    A: { id: "A", mode: "subway" },
     "7": { id: "7", mode: "subway" },
     "7X": { id: "7X", mode: "subway" },
   },
+  stations: {
+    origin: { id: "origin", name: "Origin" },
+    platformA: { id: "platformA", name: "Platform A" },
+    platformB: { id: "platformB", name: "Platform B" },
+    destination: { id: "destination", name: "Destination" },
+  },
+  transfers: { platformA: { platformB: 180 } },
+  routeTransfers: {},
   metadata: { waitSecondsByDirection: {}, waitSecondsByRoute: {}, waitSecondsByMode: { subway: 240 } },
 };
 vm.runInContext("state.data = testData", context);
 
-const folded = vm.runInContext(`reviewVisibleSteps([
+const visible = vm.runInContext(`reviewVisibleSteps([
   { type: "ride", routeId: "A", from: "origin", to: "platformA", transferSec: 0, elapsedSec: 300 },
   { type: "walk", from: "platformA", to: "platformB", transferSec: 180, elapsedSec: 180 },
   { type: "ride", routeId: "7", from: "platformB", to: "destination", transferSec: 60, elapsedSec: 360 },
 ], { foldWalks: true })`, context);
-check(folded.length === 2, "Fastest-route display must hide internal station-complex walks");
-check(folded[1].transferSec === 240 && folded[1].elapsedSec === 540,
-  "Internal station-complex walk time must be folded into the following ride");
-context.foldedRide = folded[1];
-const foldedBreakdown = vm.runInContext("formatLegBreakdown(foldedRide)", context);
-check(foldedBreakdown.includes("transfer+walk"),
-  "A folded internal walk must still be identified in the timing breakdown");
+check(visible.length === 3, "Route summaries must show internal station-complex walks");
+check(visible[1].type === "walk" && visible[1].transferSec === 180,
+  "The visible walk must retain its transfer time");
 
 const external = vm.runInContext(`reviewVisibleSteps([
   { type: "walk", from: "platformA", to: "streetTransfer", transferSec: 300, elapsedSec: 300 },
 ])`, context);
 check(external.length === 1, "Genuine between-complex walks must remain visible");
+
+vm.runInContext(`
+  state.currentStation = "platformA";
+  state.steps = [
+    { type: "ride", routeId: "A", directionId: "a", from: "origin", to: "platformA", elapsedSec: 300 },
+  ];
+  state.totalSec = 300;
+  state.undoHistory = [];
+  state.daily = [{ end: "elsewhere" }];
+  state.puzzleIndex = 0;
+  state.selected = { routeId: "7", directionId: "local", boardStation: "platformB" };
+  runtimeBetween = () => 120;
+  legTiming = () => ({ rideSec: 120, waitSec: 30, transferSec: 0, elapsedSec: 150 });
+  rideSegmentsBetween = () => [];
+  rememberMove = () => {};
+  renderLineStep = () => {};
+  samePuzzleStation = () => false;
+  addLeg("destination");
+  internalTransferSteps = state.steps;
+`, context);
+check(context.internalTransferSteps.length === 3,
+  "Boarding through another record in the same station complex must add a step");
+check(context.internalTransferSteps[1].type === "walk"
+  && context.internalTransferSteps[1].from === "platformA"
+  && context.internalTransferSteps[1].to === "platformB"
+  && context.internalTransferSteps[1].transferSec === 180,
+"The added station-complex step must describe the actual transfer");
+
+vm.runInContext(`
+  state.currentStation = "platformA";
+  state.steps = [];
+  state.totalSec = 0;
+  state.undoHistory = [];
+  state.daily = [{ start: "platformA", end: "elsewhere" }];
+  state.selected = { routeId: "7", directionId: "local", boardStation: "platformB" };
+  samePuzzleStation = (_stationId, puzzleStationId) => puzzleStationId === "platformA";
+  addLeg("destination");
+  firstBoardingSteps = state.steps;
+`, context);
+check(context.firstBoardingSteps.length === 2
+  && context.firstBoardingSteps[0].type === "walk"
+  && context.firstBoardingSteps[0].elapsedSec === 0,
+"A free first boarding through another station record must remain visible without changing the score");
+
+const initialLabel = vm.runInContext(
+  'typeof initialGameLabel === "function" ? initialGameLabel() : undefined',
+  context,
+);
+check(initialLabel === "New York City · Hard",
+  "The loading header must use the requested city and mode before network data loads");
+check(!html.includes('<strong id="currentGameLabel">Paris · Easy</strong>'),
+  "The initial HTML must not show a hard-coded city while the app starts");
 
 vm.runInContext(`
   runtimeBetween = (directionId) => directionId === "local" ? 300 : 200;
@@ -115,8 +172,6 @@ check(mapBuilder.includes("PAD = 12") && mapBuilder.includes("WIDTH - PAD * 2"),
 check(css.includes(".city-option span {\n  height: 52px;"), "All city tiles must have an equal fixed height");
 check(css.includes('.toolbar .danger-action'), "Destructive route control must have button styling");
 check(!css.includes('[data-city="new-york"] .waterway'), "NYC must not add schematic river strokes over its coastline geometry");
-check(app.includes("const internalTransfer = sameStation(state.currentStation, selected.boardStation)"), "Internal NYC station changes must be folded into the ride");
-check(app.includes("timing.transferSec += internalTransferSec;"), "Internal station transfer time must still be counted");
 check(config.puzzles.days === 48, "NYC daily calendar must end with GTFS validity on 31 October 2026");
 
 console.log("New York frontend verification passed.");

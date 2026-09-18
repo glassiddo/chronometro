@@ -11,6 +11,12 @@ const CITY_TIMEZONES = {
   madrid: "Europe/Madrid",
   "new-york": "America/New_York",
 };
+const CITY_CHOICES = [
+  ["berlin", "Berlin"], ["boston", "Boston"], ["chicago", "Chicago"],
+  ["london", "London"], ["madrid", "Madrid"], ["new-york", "New York City"],
+  ["paris", "Paris"], ["washington-dc", "Washington, DC"],
+];
+const CITY_NAMES = Object.fromEntries(CITY_CHOICES);
 const CITY_DATA_URL = `./data/${CITY_ID}`;
 const NETWORK_URL = `${CITY_DATA_URL}/network.json`;
 const RIVERS_URL = `${CITY_DATA_URL}/rivers.json?map=20260914-water`;
@@ -3059,10 +3065,10 @@ function legTiming(selected, toStation, rideSec) {
   };
 }
 
-function addWalkStep(toStation, nextRouteId = null, { renderAfter = true } = {}) {
+function addWalkStep(toStation, nextRouteId = null, { renderAfter = true, free = false } = {}) {
   const fromStation = state.currentStation;
-  const transferSec = explicitWalkSeconds(fromStation, toStation, nextRouteId);
-  if (!Number.isFinite(transferSec) || transferSec <= 0) {
+  const transferSec = free ? 0 : explicitWalkSeconds(fromStation, toStation, nextRouteId);
+  if (!Number.isFinite(transferSec) || transferSec < 0 || (!free && transferSec === 0)) {
     renderLineStep("There is no walking transfer link between those stations in the feed.");
     return false;
   }
@@ -3109,22 +3115,12 @@ function addLeg(toStation) {
     return;
   }
 
-  const internalTransfer = sameStation(state.currentStation, selected.boardStation)
-    && selected.boardStation !== state.currentStation
-    && !isFreeStartHubBoarding(selected.boardStation);
-  if (internalTransfer) {
-    const internalTransferSec = equivalentWalkSeconds(state.currentStation, selected.boardStation);
-    if (!Number.isFinite(internalTransferSec)) {
-      renderLineStep("There is no transfer link between those platforms in the feed.");
-      return;
-    }
-    timing.transferSec += internalTransferSec;
-    timing.elapsedSec += internalTransferSec;
-  }
-
   rememberMove();
-  if (!internalTransfer && selected.boardStation !== state.currentStation && !isFreeStartHubBoarding(selected.boardStation)) {
-    const walked = addWalkStep(selected.boardStation, selected.routeId, { renderAfter: false });
+  if (selected.boardStation !== state.currentStation) {
+    const walked = addWalkStep(selected.boardStation, selected.routeId, {
+      renderAfter: false,
+      free: isFreeStartHubBoarding(selected.boardStation),
+    });
     if (!walked) {
       state.undoHistory.pop();
       return;
@@ -3203,26 +3199,12 @@ function scoreRoute(puzzle, totalSec, steps = []) {
   return { score, label: "Slow route" };
 }
 
-function reviewVisibleSteps(steps, { foldWalks = false } = {}) {
-  const reviewed = steps.map((step) => ({ ...step }));
-  return reviewed.filter((step, index) => {
-    if (stepType(step) !== "walk") return true;
-    const adjacentRides = [reviewed[index - 1], reviewed[index + 1]].filter(
-      (candidate) => candidate && stepType(candidate) === "ride",
-    );
-    if (adjacentRides.some((candidate) => route(candidate.routeId)?.mode === "elizabeth")) return false;
-    if (!foldWalks || !sameStation(step.from, step.to) || stepType(reviewed[index + 1]) !== "ride") return true;
-    const nextRide = reviewed[index + 1];
-    const walkSec = Number.isFinite(step.transferSec) ? step.transferSec : step.elapsedSec || 0;
-    nextRide.transferSec = (nextRide.transferSec || 0) + walkSec;
-    nextRide.elapsedSec = (nextRide.elapsedSec || 0) + walkSec;
-    nextRide.foldedWalkSec = (nextRide.foldedWalkSec || 0) + walkSec;
-    return false;
-  });
+function reviewVisibleSteps(steps) {
+  return steps.map((step) => ({ ...step }));
 }
 
-function routePanel(title, steps, options = {}) {
-  const visibleSteps = reviewVisibleSteps(steps, options);
+function routePanel(title, steps) {
+  const visibleSteps = reviewVisibleSteps(steps);
   return `
     <div class="route-panel">
       <h3>${escapeHtml(title)}</h3>
@@ -3235,7 +3217,7 @@ function routeComparisonMarkup(userSteps, optimalSteps) {
   return `
     <div class="comparison">
       ${routePanel("Your route", userSteps)}
-      ${routePanel("Fastest route", optimalSteps, { foldWalks: true })}
+      ${routePanel("Fastest route", optimalSteps)}
     </div>
     <div class="comparison-tabs" data-comparison-tabs>
       <div class="comparison-tablist" role="tablist" aria-label="Route comparison">
@@ -3246,7 +3228,7 @@ function routeComparisonMarkup(userSteps, optimalSteps) {
         ${routePanel("Your route", userSteps)}
       </div>
       <div class="comparison-tabpanel" data-route-panel="fastest" hidden>
-        ${routePanel("Fastest route", optimalSteps, { foldWalks: true })}
+        ${routePanel("Fastest route", optimalSteps)}
       </div>
     </div>
   `;
@@ -3443,6 +3425,11 @@ function selectedModePreference() {
   }
 }
 
+function initialGameLabel() {
+  const mode = selectedModePreference();
+  return `${CITY_NAMES[CITY_ID]} · ${mode === "hard" ? "Hard" : "Easy"}`;
+}
+
 function hasCurrentProgress(mode) {
   try {
     const key = `chronometro:progress:${CITY_ID}:${state.dailyDate}:${state.dailyKind}:${mode}`;
@@ -3453,12 +3440,7 @@ function hasCurrentProgress(mode) {
 }
 
 function cityChoicesMarkup(selectedCity) {
-  const cities = [
-    ["berlin", "Berlin"], ["boston", "Boston"], ["chicago", "Chicago"],
-    ["london", "London"], ["madrid", "Madrid"], ["new-york", "New York City"],
-    ["paris", "Paris"], ["washington-dc", "Washington, DC"],
-  ];
-  return cities.map(([id, name]) => `
+  return CITY_CHOICES.map(([id, name]) => `
     <label class="city-option">
       <input type="radio" name="gameCity" value="${id}"${id === selectedCity ? " checked" : ""}>
       <span>${escapeHtml(name)}</span>
@@ -3654,6 +3636,7 @@ async function init() {
   if (CITY_ID === "boston") new Image().src = BOSTON_BASEMAP_URL;
   if (CITY_ID === "new-york") new Image().src = NEW_YORK_BASEMAP_URL;
   if (CITY_ID === "new-york") new Image().src = NEW_YORK_NETWORK_MAP_URL;
+  $("#currentGameLabel").textContent = initialGameLabel();
   showLoadingState();
   $("#homeButton").addEventListener("click", () => {
     if (state.data) renderOpeningScreen();
