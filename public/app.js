@@ -313,6 +313,30 @@ function directionGroupLabel(label) {
   return CITY_ID === "london" ? label.replace(/\s+\((?:Circle|H\s*&\s*C) Line\)$/i, "") : label;
 }
 
+function chicagoLoopEntryIndex(dir) {
+  if (CITY_ID !== "chicago" || dir.stations[0] !== dir.stations.at(-1)) return -1;
+  // These trips visit the stem twice: terminal -> Loop -> terminal.
+  const counts = new Map();
+  dir.stations.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1));
+  return dir.stations.findIndex((id) => counts.get(id) === 1);
+}
+
+function boardingDirectionLabel(dir, boardIndex) {
+  const loopEntry = chicagoLoopEntryIndex(dir);
+  if (loopEntry >= 0 && Number.isInteger(boardIndex) && boardIndex < loopEntry) return "Loop";
+  return directionGroupLabel(dir.label);
+}
+
+function boardingDirectionCandidates(board, routeId) {
+  return board.directionIds.flatMap((dirId) => {
+    const dir = direction(dirId);
+    const candidate = { routeId: board.routeId || routeId, dirId, boardStation: board.boardStation, walkSec: board.walkSec };
+    if (chicagoLoopEntryIndex(dir) < 0) return [{ ...candidate, label: directionGroupLabel(dir.label) }];
+    return dir.stations.flatMap((id, boardIndex) => id === board.boardStation && boardIndex < dir.stations.length - 1
+      ? [{ ...candidate, boardIndex, label: boardingDirectionLabel(dir, boardIndex) }] : []);
+  });
+}
+
 function directionOptionKey(candidate) {
   return `label:${candidate.label}`;
 }
@@ -344,7 +368,7 @@ function currentPuzzle() {
 function ridePathStationIds(step) {
   const dir = direction(step.directionId);
   if (!dir) return [];
-  const span = directionRideSpan(dir, step.from, step.to);
+  const span = directionRideSpan(dir, step.from, step.to, step.boardIndex);
   if (span) return dir.stations.slice(span.fromIndex, span.toIndex + 1);
   const fromIndex = dir.stations.indexOf(step.from);
   const continuation = routeContinuation(step.directionId);
@@ -392,12 +416,18 @@ function renderRouteList(steps, { showDirection = true, showBranchVia = false, s
       `;
         }
         const viaLabel = showBranchVia ? branchViaLabel(step) : "";
+        let directionLabel = "";
+        if (showDirection) {
+          const dir = direction(step.directionId);
+          const boardIndex = step.boardIndex ?? directionRideSpan(dir, step.from, step.to)?.fromIndex;
+          directionLabel = boardingDirectionLabel(dir, boardIndex);
+        }
         return `
         <div class="leg-chip">
           ${lineBadge(step.routeId)}
           <p>
             <strong>${escapeHtml(stationDisplayName(step.from))} → ${escapeHtml(stationDisplayName(step.to))}</strong>
-            ${showDirection ? `<small>Direction ${escapeHtml(directionGroupLabel(direction(step.directionId).label))}</small>` : ""}
+            ${showDirection ? `<small>Direction ${escapeHtml(directionLabel)}</small>` : ""}
             ${viaLabel ? `<small>Via ${escapeHtml(viaLabel)}</small>` : ""}
             ${detail ? `<small class="leg-detail">${escapeHtml(detail)}</small>` : ""}
           </p>
@@ -2406,14 +2436,14 @@ function transferSeconds(fromStation, toStation, fromRouteId, toRouteId, fromMod
   return null;
 }
 
-function combinedWaitSeconds(directionId, routeId, fromStation, toStation, baseWait = null) {
+function combinedWaitSeconds(directionId, routeId, fromStation, toStation, baseWait = null, boardIndex = null) {
   const r = route(routeId);
   const wait = baseWait ?? waitSeconds(directionId, routeId, r.mode);
   const group = (state.data.sharedServiceGroups || []).find((item) => item.routeIds?.includes(routeId));
   const combineSameRoute = (state.data.combinePatternsWithinRoutes || []).includes(routeId);
   if (!group && !combineSameRoute) return wait;
   const dir = direction(directionId);
-  const span = directionRideSpan(dir, fromStation, toStation);
+  const span = directionRideSpan(dir, fromStation, toStation, boardIndex);
   if (!span) return wait;
   const rideStations = dir.stations.slice(span.fromIndex, span.toIndex + 1);
   const waitsByRoute = new Map([[dir.frequencyGroup || `${routeId}:${directionId}`, wait]]);
@@ -2440,7 +2470,7 @@ function combinedWaitSeconds(directionId, routeId, fromStation, toStation, baseW
 function usesInterchangeablePatterns(step) {
   if (stepType(step) !== "ride" || !(state.data.combinePatternsWithinRoutes || []).includes(step.routeId)) return false;
   const dir = direction(step.directionId);
-  const span = dir ? directionRideSpan(dir, step.from, step.to) : null;
+  const span = dir ? directionRideSpan(dir, step.from, step.to, step.boardIndex) : null;
   if (!span) return false;
   const rideStations = dir.stations.slice(span.fromIndex, span.toIndex + 1);
   return Object.values(state.data.directions).some((candidate) => {
@@ -2757,9 +2787,7 @@ function renderDirectionStep() {
   const directionOptions = [];
   const groupedDirections = new Map();
   selected.boards.forEach((board) => {
-    board.directionIds.forEach((dirId) => {
-      const label = directionGroupLabel(direction(dirId).label);
-      const candidate = { routeId: board.routeId || selected.routeId, dirId, boardStation: board.boardStation, walkSec: board.walkSec, label };
+    boardingDirectionCandidates(board, selected.routeId).forEach((candidate) => {
       const key = directionOptionKey(candidate);
       if (!groupedDirections.has(key)) groupedDirections.set(key, { candidates: [] });
       groupedDirections.get(key).candidates.push(candidate);
@@ -2802,6 +2830,7 @@ function renderDirectionStep() {
       state.selected.routeId = option.candidates[0].routeId;
       state.selected.directionId = option.candidates[0].dirId;
       state.selected.boardStation = option.candidates[0].boardStation;
+      state.selected.boardIndex = option.candidates[0].boardIndex;
       state.selected.directionLabel = option.label;
       renderAlightStep();
     });
@@ -2816,15 +2845,22 @@ function renderAlightStep() {
   const directionCandidates = selected.directionCandidates || [{
     dirId: selected.directionId,
     boardStation: selected.boardStation,
+    boardIndex: selected.boardIndex,
     walkSec: 0,
     label: direction(selected.directionId).label,
   }];
+  if (directionCandidates.some((candidate) => chicagoLoopEntryIndex(direction(candidate.dirId)) >= 0
+    && !Number.isInteger(candidate.boardIndex))) {
+    renderDirectionStep();
+    return;
+  }
   const choiceMap = new Map();
   directionCandidates.forEach((candidate) => {
     const candidateDir = direction(candidate.dirId);
     const downstream = [];
     candidateDir.stations.forEach((stationId, boardIndex) => {
       if (stationId !== candidate.boardStation) return;
+      if (Number.isInteger(candidate.boardIndex) && boardIndex !== candidate.boardIndex) return;
       const stopIndex = candidateDir.circular
         ? Math.min(candidateDir.stations.length, boardIndex + candidateDir.ringStationCount + 1)
         : candidateDir.stations.length;
@@ -2835,13 +2871,16 @@ function renderAlightStep() {
       downstream.push(...direction(continuation.toDirectionId).stations.slice(1));
     }
     downstream.forEach((stationId) => {
-      const runSec = runtimeBetween(candidate.dirId, candidate.boardStation, stationId);
+      if (stationId === candidate.boardStation) return;
+      const runSec = runtimeBetween(candidate.dirId, candidate.boardStation, stationId, candidate.boardIndex);
       const choiceKey = CITY_ID === "london" ? stationDisplayName(stationId) : stationId;
       const choiceSec = runSec + candidate.walkSec + combinedWaitSeconds(
         candidate.dirId,
         candidate.routeId,
         candidate.boardStation,
         stationId,
+        null,
+        candidate.boardIndex,
       );
       const existing = choiceMap.get(choiceKey);
       if (!existing || choiceSec < existing.choiceSec) {
@@ -2887,7 +2926,7 @@ function renderAlightStep() {
       ${choices
         .map(
           (choice) => `
-            <button class="choice stop-choice${samePuzzleStation(choice.stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(choice.stationId)}" data-route-id="${escapeHtml(choice.routeId)}" data-direction-id="${escapeHtml(choice.dirId)}" data-board-station="${escapeHtml(choice.boardStation)}">
+            <button class="choice stop-choice${samePuzzleStation(choice.stationId, currentPuzzle().end) ? " destination-choice" : ""}" data-alight="${escapeHtml(choice.stationId)}" data-route-id="${escapeHtml(choice.routeId)}" data-direction-id="${escapeHtml(choice.dirId)}" data-board-station="${escapeHtml(choice.boardStation)}"${Number.isInteger(choice.boardIndex) ? ` data-board-index="${choice.boardIndex}"` : ""}>
               <span class="stop-node" aria-hidden="true"></span>
               <span class="stop-main">
                 <strong>${escapeHtml(stationDisplayName(choice.stationId))}</strong>
@@ -2932,6 +2971,7 @@ function renderAlightStep() {
       state.selected.routeId = button.dataset.routeId;
       state.selected.directionId = button.dataset.directionId;
       state.selected.boardStation = button.dataset.boardStation;
+      state.selected.boardIndex = button.dataset.boardIndex === undefined ? undefined : Number(button.dataset.boardIndex);
       addLeg(button.dataset.alight);
     });
   });
@@ -2939,10 +2979,11 @@ function renderAlightStep() {
   bindPuzzleToolbar();
 }
 
-function directionRideSpan(dir, fromStation, toStation) {
+function directionRideSpan(dir, fromStation, toStation, boardIndex = null) {
   let best = null;
   dir.stations.forEach((stationId, fromIndex) => {
     if (stationId !== fromStation) return;
+    if (Number.isInteger(boardIndex) && fromIndex !== boardIndex) return;
     const maximumStops = dir.circular ? dir.ringStationCount : dir.stations.length;
     const stopIndex = Math.min(dir.stations.length, fromIndex + maximumStops + 1);
     for (let toIndex = fromIndex + 1; toIndex < stopIndex; toIndex += 1) {
@@ -2956,7 +2997,7 @@ function directionRideSpan(dir, fromStation, toStation) {
 
 function directionCandidateReachesDestination(candidate, destinationId) {
   const candidateDir = direction(candidate.dirId);
-  const boardIndex = candidateDir?.stations.indexOf(candidate.boardStation) ?? -1;
+  const boardIndex = candidate.boardIndex ?? candidateDir?.stations.indexOf(candidate.boardStation) ?? -1;
   if (boardIndex < 0) return false;
   const stopIndex = candidateDir.circular
     ? Math.min(candidateDir.stations.length, boardIndex + candidateDir.ringStationCount + 1)
@@ -2972,9 +3013,9 @@ function directionCandidateReachesDestination(candidate, destinationId) {
   );
 }
 
-function runtimeBetween(dirId, fromStation, toStation) {
+function runtimeBetween(dirId, fromStation, toStation, boardIndex = null) {
   const dir = direction(dirId);
-  const span = directionRideSpan(dir, fromStation, toStation);
+  const span = directionRideSpan(dir, fromStation, toStation, boardIndex);
   if (span) return span.runtime;
   const fromIndex = dir.stations.indexOf(fromStation);
   if (fromIndex < 0) return null;
@@ -3002,13 +3043,15 @@ function bestEquivalentDirectionCandidate(selected, toStation) {
   }
   let best = null;
   candidates.forEach((candidate) => {
-    const runSec = runtimeBetween(candidate.dirId, candidate.boardStation, toStation);
+    const runSec = runtimeBetween(candidate.dirId, candidate.boardStation, toStation, candidate.boardIndex);
     if (!Number.isFinite(runSec)) return;
     const waitSec = combinedWaitSeconds(
       candidate.dirId,
       candidate.routeId || selected.routeId,
       candidate.boardStation,
       toStation,
+      null,
+      candidate.boardIndex,
     );
     const choiceSec = runSec + (candidate.walkSec || 0) + waitSec;
     if (!best || choiceSec < best.choiceSec) best = { ...candidate, choiceSec };
@@ -3016,9 +3059,9 @@ function bestEquivalentDirectionCandidate(selected, toStation) {
   return best;
 }
 
-function rideSegmentsBetween(dirId, fromStation, toStation) {
+function rideSegmentsBetween(dirId, fromStation, toStation, boardIndex = null) {
   const dir = direction(dirId);
-  const span = directionRideSpan(dir, fromStation, toStation);
+  const span = directionRideSpan(dir, fromStation, toStation, boardIndex);
   if (span) return [{ directionId: dirId, from: fromStation, to: toStation }];
   const fromIndex = dir.stations.indexOf(fromStation);
 
@@ -3040,6 +3083,8 @@ function legTiming(selected, toStation, rideSec) {
     selected.routeId,
     selected.boardStation,
     toStation,
+    null,
+    selected.boardIndex,
   );
   let transferSec = 0;
   const followsWalk = resolvePendingWalk(selected.routeId);
@@ -3102,8 +3147,9 @@ function addLeg(toStation) {
     selected.routeId = bestCandidate.routeId || selected.routeId;
     selected.directionId = bestCandidate.dirId;
     selected.boardStation = bestCandidate.boardStation;
+    selected.boardIndex = bestCandidate.boardIndex;
   }
-  const runSec = runtimeBetween(selected.directionId, selected.boardStation, toStation);
+  const runSec = runtimeBetween(selected.directionId, selected.boardStation, toStation, selected.boardIndex);
   if (!Number.isFinite(runSec)) {
     renderLineStep("That leg is not connected in the selected direction.");
     return;
@@ -3131,9 +3177,10 @@ function addLeg(toStation) {
     type: "ride",
     routeId: selected.routeId,
     directionId: selected.directionId,
+    ...(Number.isInteger(selected.boardIndex) ? { boardIndex: selected.boardIndex } : {}),
     from: selected.boardStation,
     to: toStation,
-    segments: rideSegmentsBetween(selected.directionId, selected.boardStation, toStation),
+    segments: rideSegmentsBetween(selected.directionId, selected.boardStation, toStation, selected.boardIndex),
     ...timing,
   };
   state.steps.push(leg);
@@ -3154,14 +3201,15 @@ function fastestSamePathTiming(step) {
   if (!selectedPath.length) return null;
   const candidates = boardableDirectionIds(step.from, step.routeId)
     .map((directionId) => {
-      const candidate = { ...step, directionId };
+      const boardIndex = directionId === step.directionId ? step.boardIndex : undefined;
+      const candidate = { ...step, directionId, boardIndex };
       const candidatePath = ridePathStationIds(candidate);
       if (candidatePath.length !== selectedPath.length
         || candidatePath.some((stationId, index) => stationId !== selectedPath[index])) return null;
-      const rideSec = runtimeBetween(directionId, step.from, step.to);
+      const rideSec = runtimeBetween(directionId, step.from, step.to, boardIndex);
       const transferSec = Number(step.transferSec) || 0;
       if (!Number.isFinite(rideSec) || !Number.isFinite(transferSec)) return null;
-      const waitSec = combinedWaitSeconds(directionId, step.routeId, step.from, step.to);
+      const waitSec = combinedWaitSeconds(directionId, step.routeId, step.from, step.to, null, boardIndex);
       return rideSec + waitSec + transferSec;
     })
     .filter(Number.isFinite);
