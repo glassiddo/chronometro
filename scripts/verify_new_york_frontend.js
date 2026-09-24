@@ -172,6 +172,6 @@ check(mapBuilder.includes("PAD = 12") && mapBuilder.includes("WIDTH - PAD * 2"),
 check(css.includes(".city-option span {\n  height: 52px;"), "All city tiles must have an equal fixed height");
 check(css.includes('.toolbar .danger-action'), "Destructive route control must have button styling");
 check(!css.includes('[data-city="new-york"] .waterway'), "NYC must not add schematic river strokes over its coastline geometry");
-check(config.puzzles.days === 48, "NYC daily calendar must end with GTFS validity on 31 October 2026");
+check(config.puzzles.days === 78, "NYC daily calendar must extend through 30 November 2026");
 
 console.log("New York frontend verification passed.");

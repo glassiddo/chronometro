@@ -21,7 +21,7 @@ The normal 37-stop T1 is restored from RATP's official full-line plan and an arc
 ### Boston
 
 - Red, Orange, Blue, Green B/C/D/E, and Mattapan
-- Active daily puzzles from 9 September through 31 October 2026
+- Active daily puzzles from 9 September through 30 November 2026
 - Excludes buses (including Silver Line), Commuter Rail, and ferries
 
 ### London
@@ -55,7 +55,7 @@ Complete scheduled `stop_times.txt` patterns preserve the terminal branches, sha
 - U1–U9 and all 16 regular S-Bahn lines, including S15; 316 distinct VBB parent stations
 - All S-Bahn branches remain available for routing, including Brandenburg; S-Bahn puzzle endpoints are restricted to the official Berlin state polygon
 - Excludes temporary U12, discontinued S45, diversions, replacement buses, trams, ferries, regional and long-distance rail
-- Active daily puzzles: 9 September–31 October 2026, with U-Bahn-only, mixed, and S-Bahn-only solutions every day; all require a transfer
+- Active daily puzzles: 9 September–30 November 2026, with U-Bahn-only, mixed, and S-Bahn-only solutions every day; all require a transfer
 
 The normal network combines VBB scheduled patterns with the official regular S-Bahn timetable. VBB’s 2021 archive restores U6 north and the northbound Wollankstraße stop on S1, S25, and S85. S41 runs clockwise and S42 counterclockwise, including across the stored ring seam. See [Berlin data and verification](docs/berlin-data.md).
 
@@ -73,7 +73,7 @@ See [Madrid data and timing assumptions](docs/madrid-data.md).
 - Subway routes 1–7, A–G, J/Z, L, M, N–W, and the 42 St, Franklin Av, and Rockaway shuttles
 - 424 official MTA station complexes are eligible puzzle endpoints
 - Excludes Staten Island Railway, PATH, LIRR, Metro-North, buses, and ferries
-- Daily puzzles from 14 September through 31 October 2026
+- Daily puzzles from 14 September through 30 November 2026
 
 The fixed network uses weekday trips beginning from 07:00–10:00. Express, local, branch, and shuttle stopping patterns remain distinct. Official MTA station-complex records unify puzzle endpoints while GTFS transfer times still apply to changes made during a route.
 
@@ -153,9 +153,9 @@ No city uses live service status, disruptions, closures, fares, accessibility, c
 - `public/data/chicago/` — Chicago network, examples, and daily puzzles
 - `public/data/washington-dc/` — Washington network, examples, and daily puzzles
 - `public/data/boston/` — Boston network, examples, and daily puzzles
-- `public/data/berlin/` — Berlin network, examples, and daily puzzles from 9 September through October 2026
+- `public/data/berlin/` — Berlin network, examples, and daily puzzles from 9 September through 30 November 2026
 - `public/data/madrid/` — Madrid network, examples, and daily puzzles through December 2026
-- `public/data/new-york/` — New York City Subway network, examples, and daily puzzles through 31 October 2026
+- `public/data/new-york/` — New York City Subway network, examples, and daily puzzles through 30 November 2026
 - `config/cities/` — city coverage, timing assumptions, output paths, and attribution
 - `scripts/build_city.py` — city-neutral build entry point
 - `scripts/build_data.py` — shared normalization, routing, timing, and puzzle generation
@@ -208,6 +208,9 @@ python scripts/validate_city_schema.py new-york
 python scripts/verify_timing_model.py new-york
 python scripts/verify_new_york_network.py
 node scripts/verify_berlin_frontend.js
+node scripts/verify_chicago_frontend.js
+node scripts/verify_loop_direction_frontend.js
+node scripts/verify_daily_rotation.js
 python scripts/check_auteuil_route.py
 ```
 

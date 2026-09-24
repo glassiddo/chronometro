@@ -70,6 +70,30 @@ function selectStop(name) {
   return api.state.steps.at(-1);
 }
 
+// Francisco sits between the terminal and Loop on a repeated-terminal pattern.
+// It must expose both physical directions even though both trips share the Kimball headsign.
+start("Brn", "Francisco", "Ashland (Green/Pink)");
+assert.deepEqual(
+  buttons.filter((button) => button.dataset.directionIndex !== undefined).map((button) => button.text).sort(),
+  ["Kimball", "Loop"],
+  "Francisco must offer separate Kimball-bound and Loop-bound choices",
+);
+selectDirection("Loop");
+assert.ok(buttons.some((button) => button.dataset.alight === stationId("Rockwell")),
+  "Loop-bound travel from Francisco must include Rockwell");
+const franciscoLoopLeg = selectStop("Kedzie (Brown)");
+assert.ok(franciscoLoopLeg.rideSec > 3600,
+  "Loop-bound travel from Francisco to Kedzie must charge the full downtown circuit");
+assert.ok(api.ridePathStationIds(franciscoLoopLeg).includes(stationId("Washington/Wabash")),
+  "Loop-bound travel from Francisco to Kedzie must retain the path through downtown");
+start("Brn", "Francisco", "Ashland (Green/Pink)");
+selectDirection("Kimball");
+const franciscoOutboundLeg = selectStop("Kedzie (Brown)");
+assert.ok(franciscoOutboundLeg.rideSec < 300,
+  "Kimball-bound travel from Francisco to Kedzie must use the direct outbound occurrence");
+assert.ok(!api.ridePathStationIds(franciscoOutboundLeg).includes(stationId("Washington/Wabash")),
+  "Kimball-bound travel from Francisco must not pass through downtown");
+
 // Each round-trip pattern must offer its two physical boarding directions.
 for (const [routeId, from, terminus] of [
   ["Brn", "Kedzie (Brown)", "Kimball"],

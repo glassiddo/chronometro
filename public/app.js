@@ -313,8 +313,8 @@ function directionGroupLabel(label) {
   return CITY_ID === "london" ? label.replace(/\s+\((?:Circle|H\s*&\s*C) Line\)$/i, "") : label;
 }
 
-function chicagoLoopEntryIndex(dir) {
-  if (CITY_ID !== "chicago" || dir.stations[0] !== dir.stations.at(-1)) return -1;
+function repeatedTerminalLoopEntryIndex(dir) {
+  if (dir.stations[0] !== dir.stations.at(-1)) return -1;
   // These trips visit the stem twice: terminal -> Loop -> terminal.
   const counts = new Map();
   dir.stations.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1));
@@ -322,7 +322,7 @@ function chicagoLoopEntryIndex(dir) {
 }
 
 function boardingDirectionLabel(dir, boardIndex) {
-  const loopEntry = chicagoLoopEntryIndex(dir);
+  const loopEntry = repeatedTerminalLoopEntryIndex(dir);
   if (loopEntry >= 0 && Number.isInteger(boardIndex) && boardIndex < loopEntry) return "Loop";
   return directionGroupLabel(dir.label);
 }
@@ -331,7 +331,7 @@ function boardingDirectionCandidates(board, routeId) {
   return board.directionIds.flatMap((dirId) => {
     const dir = direction(dirId);
     const candidate = { routeId: board.routeId || routeId, dirId, boardStation: board.boardStation, walkSec: board.walkSec };
-    if (chicagoLoopEntryIndex(dir) < 0) return [{ ...candidate, label: directionGroupLabel(dir.label) }];
+    if (repeatedTerminalLoopEntryIndex(dir) < 0) return [{ ...candidate, label: directionGroupLabel(dir.label) }];
     return dir.stations.flatMap((id, boardIndex) => id === board.boardStation && boardIndex < dir.stations.length - 1
       ? [{ ...candidate, boardIndex, label: boardingDirectionLabel(dir, boardIndex) }] : []);
   });
@@ -2849,7 +2849,7 @@ function renderAlightStep() {
     walkSec: 0,
     label: direction(selected.directionId).label,
   }];
-  if (directionCandidates.some((candidate) => chicagoLoopEntryIndex(direction(candidate.dirId)) >= 0
+  if (directionCandidates.some((candidate) => repeatedTerminalLoopEntryIndex(direction(candidate.dirId)) >= 0
     && !Number.isInteger(candidate.boardIndex))) {
     renderDirectionStep();
     return;
