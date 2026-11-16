@@ -2430,9 +2430,12 @@ function waitSeconds(directionId, routeId, mode) {
 function transferSeconds(fromStation, toStation, fromRouteId, toRouteId, fromMode, toMode) {
   const routePair = state.data.routeTransfers?.[fromStation]?.[toStation]?.[fromRouteId]?.[toRouteId];
   if (Number.isFinite(routePair)) return routePair;
-  if (fromStation === toStation) return transferFallback(fromMode, toMode);
+  // NYC retains MTA's station-specific interchange times, including transfers
+  // within one stop record. Other cities retain their published fallback model.
+  if (fromStation === toStation && CITY_ID !== "new-york") return transferFallback(fromMode, toMode);
   const explicit = state.data.transfers[fromStation]?.[toStation];
   if (Number.isFinite(explicit)) return explicit;
+  if (fromStation === toStation) return transferFallback(fromMode, toMode);
   return null;
 }
 

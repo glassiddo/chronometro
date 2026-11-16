@@ -38,7 +38,7 @@
     "exactRideRouting": true
   },
   "puzzles": {
-    "startDate": "2026-09-06", "days": 117, "dailyCount": 5, "exampleCount": 100,
+    "startDate": "2026-09-06", "days": 207, "dailyCount": 5, "exampleCount": 100,
     "minimumRouteDistanceMetres": 2000, "minimumEndpointDistanceMetres": 1500,
     "endpointModes": ["metro"], "boundedEndpointModes": [],
     "excludeSameComplexEndpoints": true, "requireInterchangeEndpoints": false,

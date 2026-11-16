@@ -77,7 +77,7 @@
   },
   "puzzles": {
     "startDate": "2026-07-28",
-    "days": 157,
+    "days": 247,
     "dailyCount": 5,
     "exampleCount": 100,
     "minimumRouteDistanceMetres": 1000,

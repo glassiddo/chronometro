@@ -114,8 +114,8 @@ def main() -> None:
         print(f"journey {left_name} -> {right_name}: {round(first['totalSec'] / 60)} min via {route_names}")
 
     daily = json.loads((ROOT / "public/data/washington-dc/daily/index.json").read_text(encoding="utf-8"))
-    require(daily["dates"][0] == "2026-08-29" and daily["dates"][-1] == "2026-12-31", "Washington daily range endpoints are wrong")
-    require(len(daily["dates"]) == 125, "Washington daily range must contain exactly 125 dates")
+    require(daily["dates"][0] == "2026-08-29" and daily["dates"][-1] == "2027-03-31", "Washington daily range endpoints are wrong")
+    require(len(daily["dates"]) == 215, "Washington daily range must contain exactly 215 dates")
     print(f"Washington network valid: 6 routes, {len(network['stations'])} parent stations, {len(network['directions'])} scheduled patterns")
 
 

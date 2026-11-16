@@ -13,7 +13,7 @@ The browser loads a normalized city network and five puzzles for the selected da
 ### Paris
 
 - Metro, RER A–E, and tram T1–T14
-- Daily puzzles from 28 July through 31 December 2026
+- Daily puzzles from 28 July through 31 March 2027
 - Excludes buses, ORLYVAL, CDG VAL, and non-RER rail
 
 The normal 37-stop T1 is restored from RATP's official full-line plan and an archived IDFM timetable because the 2026 snapshot reflects temporary closures on both sides of the retained central section. Normal RER A service at Nation is likewise restored from the pre-closure records within the snapshot. Replacement buses are excluded.
@@ -21,13 +21,13 @@ The normal 37-stop T1 is restored from RATP's official full-line plan and an arc
 ### Boston
 
 - Red, Orange, Blue, Green B/C/D/E, and Mattapan
-- Active daily puzzles from 9 September through 31 December 2026
+- Active daily puzzles from 9 September through 31 March 2027
 - Excludes buses (including Silver Line), Commuter Rail, and ferries
 
 ### London
 
 - All 11 Underground lines, the Elizabeth line, and the complete DLR network
-- Daily puzzles from 25 August through 31 December 2026
+- Daily puzzles from 25 August through 31 March 2027
 - Excludes London Overground, trams, buses, and National Rail
 
 London branch paths are modeled separately. Circle and H&C frequencies are combined only when either service can complete the entire selected ride. DLR's five regular terminal-to-terminal service patterns remain distinct, with timetable-derived runtimes and expected waits. Metropolitan fast and semi-fast service distinctions are not currently modeled.
@@ -37,7 +37,7 @@ London branch paths are modeled separately. Circle and H&C frequencies are combi
 - All eight CTA ‘L’ routes: Red, Blue, Brown, Green, Orange, Pink, Purple, and Yellow
 - 144 playable CTA parent stations, including temporarily closed State/Lake; platform/direction stops are retained while parsing schedules and normalized through GTFS `parent_station`
 - Excludes CTA buses and Metra
-- Daily puzzles from 26 August through 31 December 2026
+- Daily puzzles from 26 August through 31 March 2027
 
 The Loop and Green branches come from complete scheduled GTFS trip patterns. State/Lake and its adjacent runtimes are restored from CTA's official 28 October 2025 GTFS archive; temporary construction reroutes remain excluded. Purple local and weekday Loop Express patterns remain distinct.
 
@@ -46,7 +46,7 @@ The Loop and Green branches come from complete scheduled GTFS trip patterns. Sta
 - All six Metrorail lines: Red, Blue, Orange, Silver, Yellow, and Green
 - 98 playable WMATA parent stations; platform and direction records normalize only through GTFS `parent_station`
 - Excludes Metrobus, DC Circulator, MARC, VRE, Amtrak, commuter buses, and other non-Metrorail service
-- Daily puzzles from 29 August through 31 December 2026
+- Daily puzzles from 29 August through 31 March 2027
 
 Complete scheduled `stop_times.txt` patterns preserve the terminal branches, shared Blue/Orange/Silver, Blue/Yellow, and Green/Yellow infrastructure, and Silver Line Phase 2 through Dulles Airport to Ashburn. The normal FY2026 split service is retained: Silver serves both Downtown Largo and New Carrollton, while Yellow serves both Greenbelt and Mount Vernon Square. Construction-only Red Line split patterns are excluded.
 
@@ -55,7 +55,7 @@ Complete scheduled `stop_times.txt` patterns preserve the terminal branches, sha
 - U1–U9 and all 16 regular S-Bahn lines, including S15; 316 distinct VBB parent stations
 - All S-Bahn branches remain available for routing, including Brandenburg; S-Bahn puzzle endpoints are restricted to the official Berlin state polygon
 - Excludes temporary U12, discontinued S45, diversions, replacement buses, trams, ferries, regional and long-distance rail
-- Active daily puzzles: 9 September–31 December 2026, with U-Bahn-only, mixed, and S-Bahn-only solutions every day; all require a transfer
+- Active daily puzzles: 9 September–31 March 2027, with U-Bahn-only, mixed, and S-Bahn-only solutions every day; all require a transfer
 
 The normal network combines VBB scheduled patterns with the official regular S-Bahn timetable. VBB’s 2021 archive restores U6 north and the northbound Wollankstraße stop on S1, S25, and S85. S41 runs clockwise and S42 counterclockwise, including across the stored ring seam. See [Berlin data and verification](docs/berlin-data.md).
 
@@ -73,7 +73,7 @@ See [Madrid data and timing assumptions](docs/madrid-data.md).
 - Subway routes 1–7, A–G, J/Z, L, M, N–W, and the 42 St, Franklin Av, and Rockaway shuttles
 - 424 official MTA station complexes are eligible puzzle endpoints
 - Excludes Staten Island Railway, PATH, LIRR, Metro-North, buses, and ferries
-- Daily puzzles from 14 September through 31 December 2026
+- Daily puzzles from 14 September through 31 March 2027
 
 The fixed network uses weekday trips beginning from 07:00–10:00. Express, local, branch, and shuttle stopping patterns remain distinct. Official MTA station-complex records unify puzzle endpoints while GTFS transfer times still apply to changes made during a route.
 
@@ -153,9 +153,9 @@ No city uses live service status, disruptions, closures, fares, accessibility, c
 - `public/data/chicago/` — Chicago network, examples, and daily puzzles
 - `public/data/washington-dc/` — Washington network, examples, and daily puzzles
 - `public/data/boston/` — Boston network, examples, and daily puzzles
-- `public/data/berlin/` — Berlin network, examples, and daily puzzles from 9 September through 31 December 2026
-- `public/data/madrid/` — Madrid network, examples, and daily puzzles through December 2026
-- `public/data/new-york/` — New York City Subway network, examples, and daily puzzles through 31 December 2026
+- `public/data/berlin/` — Berlin network, examples, and daily puzzles from 9 September through 31 March 2027
+- `public/data/madrid/` — Madrid network, examples, and daily puzzles through March 2027
+- `public/data/new-york/` — New York City Subway network, examples, and daily puzzles through 31 March 2027
 - `config/cities/` — city coverage, timing assumptions, output paths, and attribution
 - `scripts/build_city.py` — city-neutral build entry point
 - `scripts/build_data.py` — shared normalization, routing, timing, and puzzle generation

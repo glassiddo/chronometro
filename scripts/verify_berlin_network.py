@@ -22,7 +22,7 @@ def require(condition: bool, message: str) -> None:
 def main() -> None:
     daily_dir = ROOT / "public/data/berlin/daily"
     dates = json.loads((daily_dir / "index.json").read_text(encoding="utf-8"))["dates"]
-    require(len(dates) == 114 and dates[0] == "2026-09-09" and dates[-1] == "2026-12-31", "Berlin active calendar must cover September 9–December 31")
+    require(len(dates) == 204 and dates[0] == "2026-09-09" and dates[-1] == "2027-03-31", "Berlin active calendar must cover September 9, 2026–March 31, 2027")
     build_data.configure_city("berlin")
     network_path = ROOT / "public/data/berlin/network.json"
     network = json.loads(network_path.read_text(encoding="utf-8"))

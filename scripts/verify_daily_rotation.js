@@ -6,7 +6,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const cities = ["paris", "london", "chicago", "washington-dc", "boston", "berlin", "madrid", "new-york"];
-const minimumPlayableEndDate = "2026-11-30";
+const minimumPlayableEndDate = "2027-03-31";
 const sourceMetadataFields = ["feedValidFrom", "feedValidTo", "feedVersion", "generatedFrom", "publisher"];
 const read = (file) => JSON.parse(fs.readFileSync(path.join(root, file), "utf8"));
 

@@ -30,7 +30,7 @@ def main():
     for pair in [("Longwood","Longwood Medical Area"),("Chestnut Hill","Chestnut Hill Avenue")]: require(all(n in names for n in pair) and names[pair[0]]!=names[pair[1]],f"collapsed {pair}")
     cross={(a,b,sec) for a,dests in data.get("transfers",{}).items() for b,sec in dests.items() if a!=b}; require(cross=={("place-pktrm","place-dwnxg",300),("place-dwnxg","place-pktrm",300)},f"walks {cross}")
     dates=json.loads((DAILY/"index.json").read_text(encoding="utf-8"))["dates"]
-    require(dates[0]=="2026-09-09" and dates[-1]=="2026-12-31" and len(dates)==114,"daily bounds")
+    require(dates[0]=="2026-09-09" and dates[-1]=="2027-03-31" and len(dates)==204,"daily bounds")
     require(set(dates)<={p.stem for p in DAILY.glob("????-??-??.json")},"active daily file missing")
-    print("Boston verification passed: 8 services, 124 stations, connected, 114 active days through December 31")
+    print("Boston verification passed: 8 services, 124 stations, connected, 204 active days through March 31, 2027")
 if __name__=="__main__": main()
