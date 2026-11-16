@@ -524,6 +524,7 @@ h1 {
 
 .orientation-map {
   position: relative;
+  align-self: start;
   margin: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -536,10 +537,6 @@ h1 {
   width: 100%;
   height: auto;
   aspect-ratio: 16 / 11;
-}
-
-[data-city="london"] .orientation-map svg {
-  aspect-ratio: 2 / 1;
 }
 
 [data-city="london"] .orientation-map {
@@ -555,10 +552,7 @@ h1 {
 }
 
 [data-city="boston"] .orientation-map { border-color: #9eb9c8; }
-[data-city="boston"] .waterway { stroke-width: 3; }
 [data-city="boston"] .waterbody { fill: #b9ddec; stroke: #83b8d2; stroke-width: 1; }
-.map-network-context--boston { opacity: .48; }
-
 [data-city="boston"] .station-lines .line-badge {
   flex-basis: auto; inline-size: auto; width: auto; min-width: 38px; height: 23px;
   padding: 0 7px; font-size: 9px; white-space: nowrap;
@@ -575,28 +569,8 @@ h1 {
   border-color: #9eb9c8;
 }
 
-[data-city="berlin"] .waterway {
-  stroke-width: 3;
-}
-
-.map-network-context--berlin {
-  opacity: .48;
-}
-
-[data-city="washington-dc"] .waterway {
-  stroke-width: 3.25;
-}
-
-.map-network-context--washington-dc {
-  opacity: .48;
-}
-
 [data-city="chicago"] .waterbody {
   fill: #b9ddec;
-}
-
-.map-network-context--chicago {
-  opacity: .48;
 }
 
 [data-city="chicago"] .station-lines .line-badge {
@@ -727,11 +701,6 @@ h1 {
   stroke-width: 1.1;
 }
 
-.map-network-context--new-york {
-  stroke: #59656b;
-  opacity: .42;
-}
-
 .map-park {
   fill: rgba(93, 142, 89, .18);
 }
@@ -753,7 +722,7 @@ h1 {
   stroke: #6ca6c8;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 4.5;
+  stroke-width: 3.5;
 }
 
 .map-attribution {
@@ -776,16 +745,6 @@ h1 {
   stroke-linejoin: round;
   stroke-width: 1.45;
   opacity: .18;
-}
-
-.map-network-context--london {
-  opacity: .38;
-}
-
-[data-city="london"] .waterway {
-  stroke: #5a9fc6;
-  stroke-width: 3.5;
-  opacity: .9;
 }
 
 [data-city="london"] .map-marker circle {

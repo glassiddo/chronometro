@@ -30,8 +30,7 @@ const DATA_REVISION = CITY_ID === "paris"
   : CITY_ID === "london" ? "20260909-timing-parity"
   : CITY_ID === "berlin" ? "20260909-timing-parity" : CITY_ID === "madrid" ? "20260906-madrid" : "20260909-timing-parity";
 const BOSTON_BASEMAP_URL = "./data/boston/coastline.svg?v=20260903";
-const NEW_YORK_BASEMAP_URL = "./data/new-york/coastline.svg?v=20260914-water";
-const NEW_YORK_NETWORK_MAP_URL = "./data/new-york/network-context.svg?v=20260914-clean";
+const NEW_YORK_BASEMAP_URL = "./data/new-york/coastline.svg?v=20261115-simplified";
 const MODE_PREFERENCE_KEY = "chronometro:mode";
 
 const state = {
@@ -2133,6 +2132,39 @@ const PARIS_MAP = {
 
 let CITY_MAP = PARIS_MAP;
 
+// Deliberately schematic landmark footprints, not cadastral park boundaries.
+// Keep only a few recognizable green spaces, like the Paris orientation map.
+const CITY_PARK_LANDMARKS = {
+  "new-york": [
+    [[-73.9819,40.7681],[-73.9580,40.8006],[-73.9498,40.7968],[-73.9738,40.7644]], // Central Park
+    [[-73.9799,40.6728],[-73.9630,40.6633],[-73.9637,40.6525],[-73.9726,40.6507],[-73.9818,40.6600]], // Prospect Park
+  ],
+  london: [
+    [[-0.1875,51.5098],[-0.1595,51.5137],[-0.1528,51.5046],[-0.1769,51.5013]], // Hyde Park / Kensington Gardens
+    [[-0.1657,51.5352],[-0.1460,51.5355],[-0.1450,51.5266],[-0.1601,51.5254]], // Regent's Park
+  ],
+  berlin: [
+    [[13.3340,52.5150],[13.3740,52.5180],[13.3770,52.5100],[13.3500,52.5050]], // Tiergarten
+    [[13.3930,52.4830],[13.4200,52.4810],[13.4200,52.4660],[13.3970,52.4660]], // Tempelhofer Feld
+  ],
+  madrid: [
+    [[-3.6900,40.4210],[-3.6770,40.4200],[-3.6770,40.4090],[-3.6860,40.4080]], // Retiro
+    [[-3.7590,40.4430],[-3.7250,40.4380],[-3.7220,40.4140],[-3.7480,40.4050],[-3.7730,40.4220]], // Casa de Campo
+  ],
+  chicago: [
+    [[-87.6245,41.8840],[-87.6160,41.8840],[-87.6160,41.8670],[-87.6245,41.8670]], // Grant Park
+    [[-87.6380,41.9110],[-87.6260,41.9110],[-87.6360,41.9350],[-87.6440,41.9350]], // Lincoln Park
+  ],
+  boston: [
+    [[-71.0730,42.3560],[-71.0630,42.3580],[-71.0620,42.3520],[-71.0700,42.3510]], // Common / Public Garden
+    [[-71.1030,42.3470],[-71.0890,42.3460],[-71.0940,42.3390],[-71.1010,42.3400]], // Back Bay Fens
+  ],
+  "washington-dc": [
+    [[-77.0500,38.8915],[-77.0150,38.8915],[-77.0150,38.8870],[-77.0500,38.8870]], // National Mall
+    [[-77.0640,38.9850],[-77.0400,38.9700],[-77.0480,38.9300],[-77.0570,38.9300],[-77.0700,38.9700]], // Rock Creek Park
+  ],
+};
+
 function configureCityMap() {
   if (CITY_ID === "paris") {
     CITY_MAP = PARIS_MAP;
@@ -2158,17 +2190,17 @@ function configureCityMap() {
         : isMadrid
           ? { minLat: 40.27, maxLat: 40.57, minLon: -3.98, maxLon: -3.45 }
         : isNewYork
-          ? { minLat: 40.49, maxLat: 40.94, minLon: -74.26, maxLon: -73.68 }
+          ? { minLat: 40.30, maxLat: 41.20, minLon: -74.50, maxLon: -73.30 }
        : { minLat: 51.35, maxLat: 51.65, minLon: -0.52, maxLon: 0.25 },
     outline: [],
     landmasses: [],
-    parks: [],
+    parks: CITY_PARK_LANDMARKS[CITY_ID] || [],
     airport: null,
     basemap: isBoston ? BOSTON_BASEMAP_URL : isNewYork ? NEW_YORK_BASEMAP_URL : null,
     waterbody: isBoston
       ? []
       : isChicago
-      ? [[-87.595,41.70],[-87.600,41.76],[-87.612,41.82],[-87.625,41.88],[-87.613,41.94],[-87.600,42.01],[-87.592,42.08],[-87.51,42.08],[-87.51,41.70]]
+      ? [[-87.595,41.70],[-87.600,41.76],[-87.612,41.82],[-87.625,41.88],[-87.613,41.94],[-87.600,42.01],[-87.67,42.30],[-87.80,42.70],[-86.20,42.70],[-86.50,41.65],[-87.30,41.60]]
       : [],
   };
 }
@@ -2183,15 +2215,15 @@ function fitCityMapToPuzzle() {
   }
   const lats = points.map((point) => point.lat);
   const lons = points.map((point) => point.lon);
-  const bounds = CITY_MAP.bounds;
-  // Preserve the basemap's proportions while fitting the actual journey.
-  // A small minimum span keeps nearby stations readable without losing context.
-  const aspect = (bounds.maxLon - bounds.minLon) / (bounds.maxLat - bounds.minLat);
+  const latMid = (Math.min(...lats) + Math.max(...lats)) / 2;
+  // Longitude degrees get shorter with latitude. Use the same geographic
+  // proportions in every city, independent of the source asset's bounds.
+  const aspect = (CITY_MAP.width - 24) / (CITY_MAP.height - 24)
+    / Math.cos(latMid * Math.PI / 180);
   const latSpan = Math.max(0.025,
     (Math.max(...lats) - Math.min(...lats)) * 1.55,
     (Math.max(...lons) - Math.min(...lons)) * 1.55 / aspect);
   const lonSpan = latSpan * aspect;
-  const latMid = (Math.min(...lats) + Math.max(...lats)) / 2;
   const lonMid = (Math.min(...lons) + Math.max(...lons)) / 2;
   CITY_MAP.viewBounds = {
     minLat: latMid - latSpan / 2, maxLat: latMid + latSpan / 2,
@@ -2249,8 +2281,17 @@ function mapMarker(stationId, label, className) {
   `;
 }
 
+function parkMapMarkup() {
+  return CITY_MAP.parks.map((park) => {
+    const points = park.map(([lon, lat]) => {
+      const point = mapPoint({ lat, lon }, false);
+      return `${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+    }).join(" ");
+    return `<polygon class="map-park" points="${points}"></polygon>`;
+  }).join("");
+}
+
 function networkContextMapMarkup() {
-  if (CITY_ID === "new-york") return mapImageMarkup(NEW_YORK_NETWORK_MAP_URL);
   const seen = new Set();
   const segments = [];
   Object.values(state.data.directions).forEach((dir) => {
@@ -2275,9 +2316,10 @@ function mapImageMarkup(url) {
   if (!url) return "";
   const bounds = CITY_MAP.bounds;
   const view = CITY_MAP.viewBounds || bounds;
-  const scale = (bounds.maxLon - bounds.minLon) / (view.maxLon - view.minLon);
+  const scaleX = (bounds.maxLon - bounds.minLon) / (view.maxLon - view.minLon);
+  const scaleY = (bounds.maxLat - bounds.minLat) / (view.maxLat - view.minLat);
   const origin = mapPoint({ lon: bounds.minLon, lat: bounds.maxLat }, false);
-  return `<image href="${url}" x="${origin.x - 12 * scale}" y="${origin.y - 12 * scale}" width="${320 * scale}" height="${220 * scale}"></image>`;
+  return `<image href="${url}" x="${origin.x - 12 * scaleX}" y="${origin.y - 12 * scaleY}" width="${CITY_MAP.width * scaleX}" height="${CITY_MAP.height * scaleY}" preserveAspectRatio="none"></image>`;
 }
 
 function basemapMarkup() {
@@ -2308,7 +2350,7 @@ function orientationMapMarkup() {
         <rect class="map-bg" width="${CITY_MAP.width}" height="${CITY_MAP.height}" rx="6"></rect>
         ${basemapMarkup()}
         ${(CITY_MAP.landmasses || []).map((land) => `<path class="map-land" d="${mapCurvePath(land, true)}"></path>`).join("")}
-        ${CITY_MAP.parks.map((park) => `<path class="map-park" d="${mapCurvePath(park, true)}"></path>`).join("")}
+        ${parkMapMarkup()}
         ${CITY_MAP.airport ? `<path class="map-airport" d="${mapCurvePath(CITY_MAP.airport, true)}"></path>` : ""}
         ${CITY_MAP.outline.length ? `<path class="city-outline" d="${mapCurvePath(CITY_MAP.outline, true)}"></path>` : ""}
         ${(CITY_MAP.waterbodies || []).map((body) => `<path class="waterbody" d="${mapCurvePath(body, true)}"></path>`).join("")}
@@ -2899,8 +2941,7 @@ function renderAlightStep() {
   const transferSignal = (choice) => {
     const stationId = choice.stationId;
     const runSec = choice.runSec;
-    const services = station(stationId).services || {};
-    const availableRouteIds = new Set(Object.keys(services));
+    const availableRouteIds = new Set(stationLineIds(stationId));
     stationInterchangeRouteIds(stationId).forEach((routeId) => availableRouteIds.add(routeId));
     const transferRouteIds = [...availableRouteIds]
       .filter((routeId) => route(routeId) && (CITY_ID === "new-york"
@@ -3686,7 +3727,6 @@ function updateCityChrome() {
 async function init() {
   if (CITY_ID === "boston") new Image().src = BOSTON_BASEMAP_URL;
   if (CITY_ID === "new-york") new Image().src = NEW_YORK_BASEMAP_URL;
-  if (CITY_ID === "new-york") new Image().src = NEW_YORK_NETWORK_MAP_URL;
   $("#currentGameLabel").textContent = initialGameLabel();
   showLoadingState();
   $("#homeButton").addEventListener("click", () => {
